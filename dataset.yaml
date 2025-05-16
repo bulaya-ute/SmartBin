@@ -1,0 +1,5 @@
+train: D:/Downloads/drinking_waste_dataset/Images_of_Waste/formatted/images/train
+val: D:/Downloads/drinking_waste_dataset/Images_of_Waste/formatted/images/val
+
+nc: 3
+names: ['metal', 'glass', 'plastic']
