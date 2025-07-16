@@ -3,8 +3,8 @@ import shutil
 import random
 
 # === CONFIGURATION ===
-dataset_dir = "/mnt/Data/Downloads/drinking_waste_dataset/Images_of_Waste/YOLO_imgs"  # Path to your folder with images and labels
-output_dir = "/mnt/Data/Downloads/drinking_waste_dataset/Images_of_Waste/formatted"            # Output folder for reorganized structure
+dataset_dir = "/mnt/Data/Downloads/Compressed/drinking_waste_dataset/Images_of_Waste/YOLO_imgs"  # Path to your folder with images and labels
+output_dir = "/mnt/Data/Datasets/formatted_drinking_waste_dataset"            # Output folder for reorganized structure
 image_exts = [".jpg", ".jpeg", ".png"]  # Add any other extensions you use
 split_ratio = 0.8                 # 80% train, 20% val
 

@@ -1,0 +1,100 @@
+<mxfile host="Electron" agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) draw.io/26.2.2 Chrome/134.0.6998.178 Electron/35.1.2 Safari/537.36" version="26.2.2">
+  <diagram name="Page-1" id="rmzDGA5WGFZ__E91ous-">
+    <mxGraphModel dx="2040" dy="1189" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="PZq0rWulNxrH3WrE5_gL-23" value="" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="240" y="120" width="150" height="400" as="geometry" />
+        </mxCell>
+        <mxCell id="PZq0rWulNxrH3WrE5_gL-8" style="edgeStyle=none;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="1" target="PZq0rWulNxrH3WrE5_gL-4">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="150" y="240" as="sourcePoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="PZq0rWulNxrH3WrE5_gL-9" style="edgeStyle=none;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=-0.011;entryY=0.376;entryDx=0;entryDy=0;entryPerimeter=0;" edge="1" parent="1" target="PZq0rWulNxrH3WrE5_gL-5">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="150" y="240" as="sourcePoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="PZq0rWulNxrH3WrE5_gL-1" value="User" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;" vertex="1" parent="1">
+          <mxGeometry x="110" y="210" width="30" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="PZq0rWulNxrH3WrE5_gL-3" value="Dispose&lt;div&gt;waste&lt;/div&gt;" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="258" y="130" width="110" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="PZq0rWulNxrH3WrE5_gL-4" value="Receive feedback&lt;div&gt;(LED/buzzer)&lt;/div&gt;" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="258" y="210" width="110" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="PZq0rWulNxrH3WrE5_gL-5" value="Receive&lt;div&gt;Award&lt;/div&gt;" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="258" y="290" width="110" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="PZq0rWulNxrH3WrE5_gL-7" style="edgeStyle=none;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" target="PZq0rWulNxrH3WrE5_gL-3">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="150" y="240" as="sourcePoint" />
+            <mxPoint x="200" y="210" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="PZq0rWulNxrH3WrE5_gL-10" style="edgeStyle=none;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" target="PZq0rWulNxrH3WrE5_gL-14" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="150" y="440" as="sourcePoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="PZq0rWulNxrH3WrE5_gL-12" value="Maintenance&lt;div&gt;Staff&lt;/div&gt;" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;" vertex="1" parent="1">
+          <mxGeometry x="110" y="410" width="30" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="PZq0rWulNxrH3WrE5_gL-13" value="Unlock/Empty&lt;div&gt;Bin&lt;/div&gt;" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="258" y="370" width="110" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="PZq0rWulNxrH3WrE5_gL-14" value="Reset Bin&lt;div&gt;Status&lt;/div&gt;" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="258" y="450" width="110" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="PZq0rWulNxrH3WrE5_gL-16" style="edgeStyle=none;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" target="PZq0rWulNxrH3WrE5_gL-13" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="150" y="440" as="sourcePoint" />
+            <mxPoint x="190" y="450" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="PZq0rWulNxrH3WrE5_gL-17" style="edgeStyle=none;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" target="PZq0rWulNxrH3WrE5_gL-20" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="510" y="300" as="sourcePoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="PZq0rWulNxrH3WrE5_gL-29" style="edgeStyle=none;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" target="PZq0rWulNxrH3WrE5_gL-27">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="510" y="300" as="sourcePoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="PZq0rWulNxrH3WrE5_gL-30" style="edgeStyle=none;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" target="PZq0rWulNxrH3WrE5_gL-28">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="510" y="300" as="sourcePoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="PZq0rWulNxrH3WrE5_gL-18" value="Smart Bin System" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;" vertex="1" parent="1">
+          <mxGeometry x="470" y="270" width="30" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="PZq0rWulNxrH3WrE5_gL-19" value="Auto Classify&lt;div&gt;Item&lt;/div&gt;" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="618" y="160" width="110" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="PZq0rWulNxrH3WrE5_gL-20" value="Sort Waste" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="618" y="240" width="110" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="PZq0rWulNxrH3WrE5_gL-21" style="edgeStyle=none;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" target="PZq0rWulNxrH3WrE5_gL-19" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="510" y="300" as="sourcePoint" />
+            <mxPoint x="550" y="240" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="PZq0rWulNxrH3WrE5_gL-24" value="Smart Bin System" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="240" y="520" width="150" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="PZq0rWulNxrH3WrE5_gL-27" value="Check Compartment Full" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="618" y="320" width="110" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="PZq0rWulNxrH3WrE5_gL-28" value="Lock Bin&lt;div&gt;When Full&lt;/div&gt;" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="618" y="400" width="110" height="60" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
