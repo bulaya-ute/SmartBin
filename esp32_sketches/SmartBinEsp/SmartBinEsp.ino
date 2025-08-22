@@ -1,7 +1,8 @@
 #include "Servos.h"
 #include "LEDs.h"
 #include "Ultrasonic.h"
-#include "CameraInference.h"
+#include "Camera.h"
+#include "Classification.h"
 #include "BluetoothSerial.h"
 
 
@@ -99,16 +100,34 @@ void setup() {
     logMessage("[Boot] ⚠️ Warning: Ultrasonic initialization failed");
   }
 
-  // logMessage("[Boot] Initializing Camera...");
-  // yield(); // Prevent watchdog timeout
+  // TODO: Uncomment out camera init when ready
+  logMessage("[Boot] Initializing Camera...");
+  yield(); // Prevent watchdog timeout
   
-  // try {
-  //   initCamera();
-  //   delay(100); // Give system time to breathe
-  //   logMessage("[Boot] ✅ Camera initialized");
-  // } catch (...) {
-  //   logMessage("[Boot] ⚠️ Warning: Camera initialization failed");
-  // }
+  try {
+    if (initCamera()) {
+      delay(100); // Give system time to breathe
+      logMessage("[Boot] ✅ Camera initialized");
+    } else {
+      logMessage("[Boot] ⚠️ Warning: Camera initialization failed");
+    }
+  } catch (...) {
+    logMessage("[Boot] ⚠️ Warning: Camera initialization crashed");
+  }
+
+  logMessage("[Boot] Initializing Classification...");
+  yield(); // Prevent watchdog timeout
+  
+  try {
+    if (initClassification()) {
+      delay(100); // Give system time to breathe
+      logMessage("[Boot] ✅ Classification initialized");
+    } else {
+      logMessage("[Boot] ⚠️ Warning: Classification initialization failed");
+    }
+  } catch (...) {
+    logMessage("[Boot] ⚠️ Warning: Classification initialization crashed");
+  }
 
   // // Initialize all mechanisms to "home" position with error handling
   // logMessage("[Boot] Moving to home position...");
@@ -181,7 +200,7 @@ void loop() {
     // Step 2: Close bin lid
     yield(); // Prevent watchdog timeout
     closeBinLid();
-    delay(500); // Allow lid to close
+    // No delay needed - servo handles its own timing
 
     // Step 3: Capture image
     yield(); // Prevent watchdog timeout
@@ -199,18 +218,18 @@ void loop() {
     // Step 5: Slide compartment to correct bin
     yield(); // Prevent watchdog timeout
     moveToPosition(targetPosition);
-    delay(500); // Stabilize
+    // No delay needed - servo handles its own timing
 
     // Step 6: Open release to drop item
     yield(); // Prevent watchdog timeout
     setRelease(true);
-    delay(1000); // Allow item to drop (adjust based on gravity/mechanics)
+    delay(1000); // Keep this delay for gravity - item needs time to fall
     setRelease(false); // Close release
 
     // Step 7: Return compartment to zero
     yield(); // Prevent watchdog timeout
     moveToPosition(POSITION_ZERO);
-    delay(500);
+    // No delay needed - servo handles its own timing
 
     // Step 8: Open lid for next item
     yield(); // Prevent watchdog timeout
@@ -268,25 +287,63 @@ bool isItemDetected() {
 }
 
 String captureAndClassify() {
-  // Optional: Flash LED before capture
-  setLED1(true);
-  delay(100);
-
-  String className = runInference(); // From CameraInference.h
-  setLED1(false);
-
-  logMessage("[AI] Detected class: " + className);
-
-  // Normalize or map possible model outputs
-  if (className == "Plastic" || className == "Plastic Bottle") {
-    return "plastic";
-  } else if (className == "Metal" || className == "Can") {
-    return "metal";
-  } else if (className == "Paper" || className == "Cardboard") {
-    return "paper";
-  } else {
-    return "misc";
+  // Step 1: Capture image using Camera module
+  logMessage("[Camera] Starting image capture...");
+  
+  // Optional: Flash LED before capture to indicate activity
+  // setLED1(true);
+  // delay(100);
+  
+  CapturedImage image = captureImage();
+  
+  if (!image.isValid) {
+    logMessage("[Camera] ERROR: Failed to capture image");
+    // setLED1(false);
+    return "unknown";
   }
+  
+  logMessage("[Camera] ✅ Image captured successfully");
+  
+  // Step 2: Classify image using Classification module
+  logMessage("[Classification] Starting image classification...");
+  
+  ClassificationResult result = classifyImage(image);
+  
+  // Step 3: Clean up image memory
+  releaseImage(image);
+  
+  // setLED1(false);
+  
+  if (!result.isValid) {
+    logMessage("[Classification] ERROR: Classification failed - " + result.errorMessage);
+    return "unknown";
+  }
+  
+  // Step 4: Process classification results
+  printClassificationDetails(result);
+  
+  String detectedClass = getTopClass(result);
+  
+  // Check confidence and handle low-confidence results
+  if (!isConfidentResult(result)) {
+    logMessage("[Classification] ⚠️ Low confidence result, routing to MISC bin");
+    detectedClass = "misc";
+  }
+  
+  // Step 5: Normalize class names to match bin positions
+  if (detectedClass == "Plastic" || detectedClass == "Plastic Bottle") {
+    detectedClass = "plastic";
+  } else if (detectedClass == "Metal" || detectedClass == "Can") {
+    detectedClass = "metal";
+  } else if (detectedClass == "Paper" || detectedClass == "Cardboard") {
+    detectedClass = "paper";
+  } else if (detectedClass != "plastic" && detectedClass != "metal" && detectedClass != "paper") {
+    detectedClass = "misc";
+  }
+  
+  logMessage("[Classification] ✅ Final classification: " + detectedClass);
+  
+  return detectedClass;
 }
 
 int getTargetPosition(String className) {
@@ -300,22 +357,32 @@ int getTargetPosition(String className) {
 // These are just wrappers — actual servo control goes in Servos.cpp
 
 void moveToPosition(int position) {
-  logMessage("[Motor] Moving to position: " + String(position));
+  int currentPos = getCurrentSlidingPosition();
+  int displacement = abs(position - currentPos);
+  logMessage("[Motor] Moving from " + String(currentPos) + "° to " + String(position) + "° (displacement: " + String(displacement) + "°)");
   rotateSlidingMotor(position); // This will be implemented to move the sliding compartment
 }
 
 void setRelease(bool open) {
   int angle = open ? RELEASE_OPEN : RELEASE_CLOSED;
-  logMessage(open ? "[Release] Opening..." : "[Release] Closing...");
+  int currentPos = getCurrentDroppingPosition();
+  int displacement = abs(angle - currentPos);
+  logMessage((open ? "[Release] Opening" : "[Release] Closing") + String(" from ") + String(currentPos) + "° to " + String(angle) + "° (displacement: " + String(displacement) + "°)");
   rotateDroppingMotor(angle); // Or actuate solenoid, etc.
 }
 
 void openBinLid() {
-  logMessage("[Lid] Opening bin lid...");
-  // Example: rotateLidServo(LID_OPEN_ANGLE);
+  const int LID_OPEN_ANGLE = 90; // Define this based on your lid mechanism
+  int currentPos = getCurrentLidPosition();
+  int displacement = abs(LID_OPEN_ANGLE - currentPos);
+  logMessage("[Lid] Opening bin lid from " + String(currentPos) + "° to " + String(LID_OPEN_ANGLE) + "° (displacement: " + String(displacement) + "°)");
+  rotateLid(LID_OPEN_ANGLE);
 }
 
 void closeBinLid() {
-  logMessage("[Lid] Closing bin lid...");
-  // Example: rotateLidServo(LID_CLOSED_ANGLE);
+  const int LID_CLOSED_ANGLE = 0; // Define this based on your lid mechanism
+  int currentPos = getCurrentLidPosition();
+  int displacement = abs(LID_CLOSED_ANGLE - currentPos);
+  logMessage("[Lid] Closing bin lid from " + String(currentPos) + "° to " + String(LID_CLOSED_ANGLE) + "° (displacement: " + String(displacement) + "°)");
+  rotateLid(LID_CLOSED_ANGLE);
 }
