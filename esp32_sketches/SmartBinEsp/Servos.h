@@ -1,7 +1,7 @@
 #ifndef SERVOS_H
 #define SERVOS_H
 
-#include <Servo.h>
+#include <ESP32Servo.h>
 
 // Define pins for servos
 extern int COIN_DISPENSER_PIN;

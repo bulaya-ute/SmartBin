@@ -2,12 +2,19 @@
 #include <Arduino.h>
 
 // Pin assignments (update to match your wiring)
-int ULTRASONIC_TRIG_PIN = 5;
-int ULTRASONIC_ECHO_PIN = 18;
+int ULTRASONIC_TRIG_PIN = 14;
+int ULTRASONIC_ECHO_PIN = 15;
 
 void initUltrasonic() {
+  yield(); // Prevent watchdog timeout
   pinMode(ULTRASONIC_TRIG_PIN, OUTPUT);
+  delay(5); // Brief delay
+  
+  yield(); // Prevent watchdog timeout
   pinMode(ULTRASONIC_ECHO_PIN, INPUT);
+  delay(5); // Brief delay
+  
+  yield(); // Final yield
 }
 
 float readUltrasonicDistance() {

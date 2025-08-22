@@ -7,9 +7,19 @@ int LED2_PIN = 4;
 int LED3_PIN = 16;
 
 void initLEDs() {
+  yield(); // Prevent watchdog timeout
   pinMode(LED1_PIN, OUTPUT);
+  delay(5); // Brief delay
+  
+  yield(); // Prevent watchdog timeout
   pinMode(LED2_PIN, OUTPUT);
+  delay(5); // Brief delay
+  
+  yield(); // Prevent watchdog timeout
   pinMode(LED3_PIN, OUTPUT);
+  delay(5); // Brief delay
+  
+  yield(); // Final yield
 }
 
 void setLED1(bool state) { digitalWrite(LED1_PIN, state); }
