@@ -1,27 +1,51 @@
 #include "Classification.h"
 #include <Arduino.h>
 
+// Include model data
+extern const unsigned char waste_classification_model[];
+extern const int waste_classification_model_len;
+
 // Classification confidence thresholds
 const float CONFIDENCE_THRESHOLD = 0.60f;  // 60% minimum confidence
 const float MINIMUM_CONFIDENCE = 0.30f;    // 30% absolute minimum
 
+// Model configuration (adjust based on your trained model)
+const int MODEL_INPUT_WIDTH = 48;    // Width your model expects
+const int MODEL_INPUT_HEIGHT = 48;   // Height your model expects  
+const int MODEL_INPUT_CHANNELS = 3;  // RGB channels
+const int MODEL_OUTPUT_CLASSES = 4;  // metal, misc, paper, plastic
+
+// Class names corresponding to model output indices
+const char* class_names[MODEL_OUTPUT_CLASSES] = {"metal", "misc", "paper", "plastic"};
+
 static bool classificationInitialized = false;
 
 bool initClassification() {
-    Serial.println("[Classification] Initializing mock classification system...");
+    Serial.println("[Classification] Initializing classification system...");
+    
+    // For now, just simulate initialization
+    // TODO: Add TensorFlow Lite initialization once library issues are resolved
+    Serial.printf("[Classification] Model size: %d bytes\n", waste_classification_model_len);
+    Serial.printf("[Classification] Expected input: %dx%dx%d\n", MODEL_INPUT_WIDTH, MODEL_INPUT_HEIGHT, MODEL_INPUT_CHANNELS);
+    Serial.printf("[Classification] Output classes: %d\n", MODEL_OUTPUT_CLASSES);
+    
+    delay(100);
     yield(); // Prevent watchdog timeout
     
-    // TODO: Replace with actual Edge Impulse model initialization
-    // For now, just simulate initialization
-    delay(100);
-    
-    Serial.println("[Classification] ✅ Mock classification system initialized");
+    Serial.println("[Classification] ✅ Classification initialized successfully (mock mode)");
     classificationInitialized = true;
     return true;
 }
 
 ClassificationResult classifyImage(const CapturedImage& image) {
-    ClassificationResult result = {"unknown", 0.0f, false, ""};
+    ClassificationResult result; // Use default constructor
+    result.detectedClass = "unknown";
+    result.confidence = 0.0f;
+    result.isValid = false;
+    result.errorMessage = "";
+    for(int i = 0; i < 4; i++) {
+        result.classConfidences[i] = 0.0f;
+    }
     
     if (!classificationInitialized) {
         result.errorMessage = "Classification system not initialized";
@@ -35,7 +59,7 @@ ClassificationResult classifyImage(const CapturedImage& image) {
         return result;
     }
     
-    Serial.println("[Classification] Processing image...");
+    Serial.println("[Classification] Processing image (mock classification)...");
     Serial.printf("[Classification] Image details: %d bytes, %dx%d pixels\n", 
                   image.imageSize, 
                   image.frameBuffer->width, 
@@ -43,63 +67,35 @@ ClassificationResult classifyImage(const CapturedImage& image) {
     
     yield(); // Prevent watchdog timeout
     
-    // TODO: Replace this mock classification with actual Edge Impulse inference
-    // For now, simulate realistic classification behavior
+    // TODO: Replace this mock classification with real TensorFlow Lite inference
+    // For now, simulate classification results for testing
     
-    // Array of possible classifications from your Edge Impulse model
-    String classifications[] = {"metal", "misc", "paper", "plastic"};
-    float confidences[] = {0.0f, 0.0f, 0.0f, 0.0f};
+    // Mock classification - randomly assign a class for testing
+    int mockClassIndex = random(0, MODEL_OUTPUT_CLASSES);
+    float mockConfidence = random(60, 95) / 100.0f; // 60-95% confidence
     
-    // Generate random classification with realistic confidence distribution
-    int randomIndex = random(0, 4);  // 0-3 for the 4 classes
-    float baseConfidence = random(30, 95) / 100.0f;  // 30-95% confidence
+    result.detectedClass = String(class_names[mockClassIndex]);
+    result.confidence = mockConfidence;
+    result.isValid = true;
+    result.errorMessage = "";
     
-    // Set the selected class confidence
-    confidences[randomIndex] = baseConfidence;
-    
-    // Distribute remaining confidence among other classes
-    float remainingConfidence = 1.0f - baseConfidence;
-    for (int i = 0; i < 4; i++) {
-        if (i != randomIndex) {
-            float maxRemaining = remainingConfidence / (4 - 1); // Distribute evenly among remaining classes
-            confidences[i] = random(0, (int)(maxRemaining * 1000)) / 1000.0f;
-            remainingConfidence -= confidences[i];
+    // Fill class confidences (mock values)
+    for(int i = 0; i < MODEL_OUTPUT_CLASSES; i++) {
+        if (i == mockClassIndex) {
+            result.classConfidences[i] = mockConfidence;
+        } else {
+            result.classConfidences[i] = random(5, 25) / 100.0f; // Low confidence for other classes
         }
     }
     
-    // Ensure confidences sum to approximately 1.0
-    confidences[randomIndex] += remainingConfidence;
+    // Update legacy compatibility fields
+    result.topClass = result.detectedClass;
+    result.topConfidence = result.confidence;
+    result.success = result.isValid;
+    result.error = result.errorMessage;
     
-    // Log all predictions like the real model would
-    Serial.println("[Classification] Mock classification results:");
-    for (int i = 0; i < 4; i++) {
-        Serial.printf("[Classification] %s: %.1f%%\n", 
-                     classifications[i].c_str(), 
-                     confidences[i] * 100.0f);
-    }
-    
-    String topClass = classifications[randomIndex];
-    float topConfidence = confidences[randomIndex];
-    
-    // Simulate processing delay (real Edge Impulse inference takes time)
-    delay(200);
-    yield(); // Prevent watchdog timeout
-    
-    // Fill result structure
-    result.detectedClass = topClass;
-    result.confidence = topConfidence;
-    result.isValid = true;
-    
-    Serial.printf("[Classification] ✅ Top prediction: %s (%.1f%% confidence)\n", 
-                 topClass.c_str(), 
-                 topConfidence * 100.0f);
-    
-    // Check if confidence meets threshold
-    if (topConfidence < CONFIDENCE_THRESHOLD) {
-        Serial.printf("[Classification] ⚠️ Low confidence (%.1f%% < %.1f%% threshold)\n", 
-                     topConfidence * 100.0f, 
-                     CONFIDENCE_THRESHOLD * 100.0f);
-    }
+    Serial.printf("[Classification] ✅ Mock classification: %s (%.1f%% confidence)\n", 
+                  result.detectedClass.c_str(), result.confidence * 100.0f);
     
     return result;
 }
@@ -132,6 +128,13 @@ void printClassificationDetails(const ClassificationResult& result) {
     Serial.printf("[Classification] Meets Threshold: %s (%.1f%% required)\n", 
                   isConfidentResult(result) ? "✅ YES" : "❌ NO",
                   CONFIDENCE_THRESHOLD * 100.0f);
+    
+    Serial.println("[Classification] All class confidences:");
+    for (int i = 0; i < MODEL_OUTPUT_CLASSES; i++) {
+        Serial.printf("[Classification] %s: %.1f%%\n", 
+                     class_names[i], 
+                     result.classConfidences[i] * 100.0f);
+    }
     Serial.println("[Classification] ============================");
 }
 
@@ -141,4 +144,35 @@ String confidenceToString(float confidence) {
     if (confidence >= 0.60f) return "Good";
     if (confidence >= 0.40f) return "Low";
     return "Very Low";
+}
+
+// Mock image preprocessing functions (placeholders for now)
+bool preprocessImage(const CapturedImage& image, float* input_data) {
+    // Mock preprocessing - just return true for now
+    return true;
+}
+
+void resizeImage(uint8_t* src, int src_width, int src_height, 
+                 float* dst, int dst_width, int dst_height) {
+    // Mock resize - placeholder
+}
+
+void normalizePixels(float* image_data, int pixel_count) {
+    // Mock normalization - placeholder
+}
+
+void printModelInfo() {
+    if (!classificationInitialized) {
+        Serial.println("[Classification] Model not initialized");
+        return;
+    }
+    
+    Serial.println("[Classification] === MODEL INFO (MOCK) ===");
+    Serial.printf("[Classification] Model size: %d bytes\n", waste_classification_model_len);
+    Serial.printf("[Classification] Input shape: [1, %d, %d, %d]\n",
+                 MODEL_INPUT_HEIGHT, MODEL_INPUT_WIDTH, MODEL_INPUT_CHANNELS);
+    Serial.printf("[Classification] Output classes: %d\n", MODEL_OUTPUT_CLASSES);
+    Serial.println("[Classification] Classes: metal, misc, paper, plastic");
+    Serial.println("[Classification] Mode: MOCK (for testing compilation)");
+    Serial.println("[Classification] ==================");
 }
