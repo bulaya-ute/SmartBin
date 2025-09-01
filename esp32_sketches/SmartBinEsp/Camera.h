@@ -17,6 +17,12 @@ bool initCamera();
 bool isCameraReady();
 CapturedImage captureImage();
 void releaseImage(CapturedImage& image);
+void clearDMABuffers(); // New function to manually clear DMA buffers
+
+// Flash control functions
+void initFlash();
+void flashOn();
+void flashOff();
 
 // Camera configuration for ESP32-CAM (ESP_EYE model)
 void setupCameraConfig();
