@@ -18,6 +18,7 @@ bool isCameraReady();
 CapturedImage captureImage();
 void releaseImage(CapturedImage& image);
 void clearDMABuffers(); // New function to manually clear DMA buffers
+void checkCameraStatus(); // Diagnostic function to check camera health
 
 // Flash control functions
 void initFlash();

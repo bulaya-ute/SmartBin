@@ -23,16 +23,16 @@ static camera_config_t camera_config = {
     .pin_href = 23,        // HREF pin
     .pin_pclk = 22,        // PCLK pin
 
-    .xclk_freq_hz = 10000000, // Reduced XCLK frequency for stability
+    .xclk_freq_hz = 20000000, // Back to 20MHz like working guide
     .ledc_timer = LEDC_TIMER_0,
     .ledc_channel = LEDC_CHANNEL_0,
 
-    .pixel_format = PIXFORMAT_RGB565, // Back to RGB565 for direct processing
-    .frame_size = FRAMESIZE_QQVGA,    // Back to 160x120 for efficiency
-    .jpeg_quality = 12,               // JPEG quality (not used with RGB565)
-    .fb_count = 1,                    // Single buffer to reduce memory pressure
+    .pixel_format = PIXFORMAT_JPEG,   // JPEG format like working guide
+    .frame_size = FRAMESIZE_UXGA,     // High resolution when PSRAM available
+    .jpeg_quality = 10,               // Lower number = better quality
+    .fb_count = 2,                    // 2 frame buffers like working guide
     .fb_location = CAMERA_FB_IN_PSRAM, // Use PSRAM for frame buffer
-    .grab_mode = CAMERA_GRAB_LATEST   // Only keep latest frame, discard old ones
+    .grab_mode = CAMERA_GRAB_WHEN_EMPTY
 };
 
 static bool cameraInitialized = false;
@@ -43,6 +43,19 @@ bool initCamera() {
     
     // Initialize flash LED
     initFlash();
+    
+    // Configure camera based on PSRAM availability (like working guide)
+    if (psramFound()) {
+        Serial.println("[Camera] PSRAM found - using high resolution");
+        camera_config.frame_size = FRAMESIZE_UXGA;
+        camera_config.jpeg_quality = 10;
+        camera_config.fb_count = 2;
+    } else {
+        Serial.println("[Camera] PSRAM not found - using lower resolution");
+        camera_config.frame_size = FRAMESIZE_SVGA;
+        camera_config.jpeg_quality = 12;
+        camera_config.fb_count = 1;
+    }
     
     // Initialize camera
     esp_err_t err = esp_camera_init(&camera_config);
@@ -126,42 +139,30 @@ CapturedImage captureImage() {
         return result;
     }
     
-    Serial.println("[Camera] Capturing image with flash...");
+    Serial.println("[Camera] Starting image capture...");
     yield(); // Prevent watchdog timeout
     
     // Turn on flash before capture
     flashOn();
     
-    // Add small delay to allow flash to illuminate properly
-    delay(100);
+    // Add delay to allow flash to illuminate properly
+    delay(150);
     
-    // Capture frame with retry logic for DMA overflow
-    camera_fb_t* frameBuffer = nullptr;
-    int retries = 3;
-    
-    for (int i = 0; i < retries; i++) {
-        frameBuffer = esp_camera_fb_get();
-        
-        if (frameBuffer) {
-            break; // Success
-        }
-        
-        Serial.printf("[Camera] Capture attempt %d failed, retrying...\n", i + 1);
-        delay(100); // Wait before retry
-        yield();
-    }
+    // Simple capture approach like working guide
+    camera_fb_t* frameBuffer = esp_camera_fb_get();
     
     // Turn off flash immediately after capture attempt
     flashOff();
     
     if (!frameBuffer) {
-        Serial.println("[Camera] ERROR: Failed to capture image after retries");
+        Serial.println("[Camera] Error: Failed to capture image");
         return result;
     }
     
     // Check if frame buffer is valid
     if (frameBuffer->len == 0 || frameBuffer->buf == nullptr) {
-        Serial.println("[Camera] ERROR: Invalid frame buffer");
+        Serial.println("[Camera] ERROR: Invalid frame buffer - zero length or null data");
+        Serial.printf("[Camera] Buffer details: len=%d, buf=%p\n", frameBuffer->len, frameBuffer->buf);
         esp_camera_fb_return(frameBuffer);
         return result;
     }
@@ -200,23 +201,31 @@ void clearDMABuffers() {
         return;
     }
     
-    Serial.println("[Camera] Manually clearing DMA buffers...");
+    Serial.println("[Camera] Aggressively clearing DMA buffers...");
     int cleared = 0;
     
-    // Clear up to 5 pending frames
-    for (int i = 0; i < 5; i++) {
+    // Clear up to 10 pending frames (increased from 5)
+    for (int i = 0; i < 10; i++) {
         camera_fb_t* temp_fb = esp_camera_fb_get();
         if (temp_fb) {
             esp_camera_fb_return(temp_fb);
             cleared++;
-            delay(10); // Small delay between clears
+            Serial.printf("[Camera] Cleared DMA buffer %d (size: %d bytes)\n", cleared, temp_fb->len);
+            delay(20); // Slightly longer delay between clears
         } else {
             break; // No more frames to clear
         }
         yield();
     }
     
-    Serial.printf("[Camera] Cleared %d DMA buffers\n", cleared);
+    if (cleared > 0) {
+        Serial.printf("[Camera] ✅ Cleared %d DMA buffers\n", cleared);
+    } else {
+        Serial.println("[Camera] No DMA buffers to clear");
+    }
+    
+    // Add a brief pause after clearing
+    delay(50);
 }
 
 void initFlash() {
@@ -233,4 +242,36 @@ void flashOn() {
 void flashOff() {
     digitalWrite(FLASH_LED_PIN, LOW);
     Serial.println("[Camera] Flash OFF");
+}
+
+void checkCameraStatus() {
+    Serial.println("[Camera] === CAMERA STATUS CHECK ===");
+    Serial.printf("[Camera] Initialized: %s\n", cameraInitialized ? "YES" : "NO");
+    
+    if (!cameraInitialized) {
+        Serial.println("[Camera] Camera not initialized - run initCamera() first");
+        return;
+    }
+    
+    // Check sensor status
+    sensor_t* sensor = esp_camera_sensor_get();
+    if (sensor) {
+        Serial.println("[Camera] Sensor: DETECTED");
+        Serial.printf("[Camera] Sensor ID: 0x%02X\n", sensor->id.PID);
+    } else {
+        Serial.println("[Camera] Sensor: NOT DETECTED - CRITICAL ERROR");
+    }
+    
+    // Try a quick test capture to check DMA status
+    Serial.println("[Camera] Testing DMA with quick capture...");
+    camera_fb_t* test_fb = esp_camera_fb_get();
+    if (test_fb) {
+        Serial.printf("[Camera] DMA Status: OK (captured %dx%d, %d bytes)\n", 
+                      test_fb->width, test_fb->height, test_fb->len);
+        esp_camera_fb_return(test_fb);
+    } else {
+        Serial.println("[Camera] DMA Status: FAILED - DMA overflow likely");
+    }
+    
+    Serial.println("[Camera] ========================");
 }
