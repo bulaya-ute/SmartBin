@@ -1,9 +1,10 @@
-#include "Servos.h"
-#include "LEDs.h"
-#include "Ultrasonic.h"
 #include "Camera.h"
-#include "Classification.h"
-#include "Logger.h"  // For centralized logging
+#include "Classification.h" 
+#include "LEDs.h"
+#include "Servos.h"
+#include "Ultrasonic.h"
+#include "Logger.h"
+#include "Communication.h"  // For centralized logging
 #include "BluetoothSerial.h"
 
 String device_name = "SmartBin_ESP32";
@@ -20,6 +21,9 @@ String device_name = "SmartBin_ESP32";
 
 // Create Bluetooth Serial object (used by Logger module)
 BluetoothSerial SerialBT;
+
+// Create Communication object for laptop protocol
+Communication comm(&SerialBT);
 
 // Timing & state
 unsigned long lastTrigger = 0;
@@ -160,6 +164,26 @@ void setup() {
   //   LOG_BOOT("⚠️ Warning: Bin lid operation failed");
   // }
 
+  // Initialize Communication Protocol
+  LOG_BOOT("Initializing laptop communication protocol...");
+  yield(); // Prevent watchdog timeout
+  
+  try {
+    comm.begin();
+    LOG_BOOT("✅ Communication protocol initialized");
+    
+    // Wait for laptop connection
+    LOG_BOOT("Waiting for laptop connection...");
+    if (comm.waitForLaptopConnection()) {
+      LOG_BOOT("✅ Laptop connected successfully!");
+    } else {
+      LOG_BOOT("⚠️ Warning: Laptop connection timeout - continuing without laptop");
+    }
+    
+  } catch (...) {
+    LOG_BOOT("⚠️ Warning: Communication initialization failed");
+  }
+
   LOG_SYSTEM("SmartBin Ready and Initialized");
   LOG_SYSTEM("Watchdog timer reset successfully avoided!");
 }
@@ -167,6 +191,9 @@ void setup() {
 void loop() {
   // Add watchdog reset to prevent hanging
   yield(); // Allow ESP32 to handle background tasks
+  
+  // Update communication system
+  comm.update();
   
   // Check available memory periodically
   static unsigned long lastMemCheck = 0;
@@ -268,29 +295,65 @@ bool isItemDetected() {
 }
 
 String captureAndClassify() {
+  // Check if laptop is connected for remote classification
+  if (comm.isLaptopConnected()) {
+    logMessage("[Classification] Using laptop-based classification");
+    
+    // Step 1: Capture image using Camera module
+    logMessage("[Camera] Starting image capture...");
+    
+    CapturedImage image = captureImage();
+    
+    if (!image.isValid) {
+      logMessage("[Camera] ERROR: Failed to capture image");
+      return "unknown";
+    }
+    
+    logMessage("[Camera] ✅ Image captured successfully");
+    
+    // Step 2: Send image to laptop for classification
+    String classificationResult;
+    bool success = comm.sendImageForClassification(
+      image.imageData, 
+      image.imageSize,
+      image.frameBuffer->width,
+      image.frameBuffer->height,
+      classificationResult
+    );
+    
+    // Release camera buffer
+    releaseImage(image);
+    
+    if (success) {
+      logMessage("[Classification] ✅ Laptop classification result: " + classificationResult);
+      return classificationResult;
+    } else {
+      logMessage("[Classification] ❌ Laptop classification failed - falling back to local");
+      // Fall through to local classification
+    }
+  }
+  
+  // Fallback: Local classification (original method)
+  logMessage("[Classification] Using local ESP32 classification");
+  
   // Step 1: Capture image using Camera module
   logMessage("[Camera] Starting image capture...");
-  
-  // Optional: Flash LED before capture to indicate activity
-  // setLED1(true);
-  // delay(100);
   
   CapturedImage image = captureImage();
   
   if (!image.isValid) {
     logMessage("[Camera] ERROR: Failed to capture image");
-    // setLED1(false);
     return "unknown";
   }
   
   logMessage("[Camera] ✅ Image captured successfully");
   
-  // Print captured image data for verification (Base64 transmission)
+  // For debugging: still print image data when doing local classification
   logMessage("[Camera] Printing image data for verification...");
   printImageAsBase64(image);
   
-  // Step 2: Classify image using Classification module
-  logMessage("[Classification] Starting image classification...");
+  // Step 2: Classify image using local Classification module
+  logMessage("[Classification] Starting local image classification...");
   
   ClassificationResult result = classifyImage(image);
   

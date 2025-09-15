@@ -32,7 +32,7 @@ static camera_config_t camera_config = {
     .pixel_format = PIXFORMAT_JPEG,   // JPEG format like working guide
     .frame_size = FRAMESIZE_UXGA,     // High resolution when PSRAM available
     .jpeg_quality = 10,               // Lower number = better quality
-    .fb_count = 2,                    // 2 frame buffers like working guide
+    .fb_count = 1,                    // Single frame buffer to reduce stale frames
     .fb_location = CAMERA_FB_IN_PSRAM, // Use PSRAM for frame buffer
     .grab_mode = CAMERA_GRAB_WHEN_EMPTY
 };
@@ -143,13 +143,23 @@ CapturedImage captureImage() {
     LOG_CAMERA("Starting image capture...");
     yield(); // Prevent watchdog timeout
     
+    // FLUSH OLD FRAMES: Discard any stale frames in the buffer
+    LOG_CAMERA("Flushing old frames from buffer...");
+    for (int i = 0; i < 3; i++) {
+        camera_fb_t* stale_fb = esp_camera_fb_get();
+        if (stale_fb) {
+            esp_camera_fb_return(stale_fb);
+            delay(100); // Allow time for new frame to be ready
+        }
+    }
+    
     // Turn on flash before capture
     flashOn();
     
     // Add delay to allow flash to illuminate properly
     delay(150);
     
-    // Simple capture approach like working guide
+    // Now capture a fresh frame
     camera_fb_t* frameBuffer = esp_camera_fb_get();
     
     // Turn off flash immediately after capture attempt
