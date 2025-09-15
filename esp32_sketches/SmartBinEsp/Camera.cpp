@@ -1,5 +1,7 @@
 #include "Camera.h"
 #include <Arduino.h>
+#include "mbedtls/base64.h"  // For Base64 encoding
+#include "Logger.h"  // For centralized logging
 
 // Flash LED pin for AI Thinker ESP32-CAM
 #define FLASH_LED_PIN 4  // GPIO 4 is the flash LED on AI Thinker
@@ -38,22 +40,22 @@ static camera_config_t camera_config = {
 static bool cameraInitialized = false;
 
 bool initCamera() {
-    Serial.println("[Camera] Initializing ESP32-CAM (AI Thinker)...");
+    LOG_CAMERA("Initializing ESP32-CAM (AI Thinker)...");
     yield(); // Prevent watchdog timeout
     
     // Initialize flash LED
     initFlash();
     
-    // Configure camera based on PSRAM availability (like working guide)
+    // Configure camera based on PSRAM availability - using lower resolutions for better Bluetooth transmission
     if (psramFound()) {
-        Serial.println("[Camera] PSRAM found - using high resolution");
-        camera_config.frame_size = FRAMESIZE_UXGA;
-        camera_config.jpeg_quality = 10;
+        LOG_CAMERA("PSRAM found - using medium resolution for classification");
+        camera_config.frame_size = FRAMESIZE_VGA;  // 640x480 - good for classification
+        camera_config.jpeg_quality = 15;           // Moderate compression
         camera_config.fb_count = 2;
     } else {
-        Serial.println("[Camera] PSRAM not found - using lower resolution");
-        camera_config.frame_size = FRAMESIZE_SVGA;
-        camera_config.jpeg_quality = 12;
+        LOG_CAMERA("PSRAM not found - using lower resolution");
+        camera_config.frame_size = FRAMESIZE_QVGA; // 320x240 - minimum for classification
+        camera_config.jpeg_quality = 20;           // Higher compression
         camera_config.fb_count = 1;
     }
     
@@ -61,7 +63,7 @@ bool initCamera() {
     esp_err_t err = esp_camera_init(&camera_config);
     
     if (err != ESP_OK) {
-        Serial.printf("[Camera] ERROR: Camera init failed with error 0x%x\n", err);
+        logMessage("[Camera] ERROR: Camera init failed with error 0x" + String(err, HEX));
         cameraInitialized = false;
         return false;
     }
@@ -93,36 +95,35 @@ bool initCamera() {
         sensor->set_dcw(sensor, 1);            // DCW (downsize enable)
         sensor->set_colorbar(sensor, 0);       // Disable color bar test pattern
         
-        Serial.println("[Camera] Sensor configured successfully");
+        LOG_CAMERA("Sensor configured successfully");
     }
     
     delay(500); // Longer delay for AI Thinker stabilization
     yield(); // Prevent watchdog timeout
     
     // Clear any residual frames from automatic capture to prevent DMA overflow
-    Serial.println("[Camera] Clearing DMA buffers...");
+    LOG_CAMERA("Clearing DMA buffers...");
     for (int i = 0; i < 3; i++) {
         camera_fb_t* temp_fb = esp_camera_fb_get();
         if (temp_fb) {
             esp_camera_fb_return(temp_fb);
-            Serial.printf("[Camera] Cleared buffer %d\n", i + 1);
+            logMessage("[Camera] Cleared buffer " + String(i + 1));
         }
         delay(50);
         yield();
     }
     
     // Test capture to ensure DMA is working properly
-    Serial.println("[Camera] Testing initial capture...");
+    LOG_CAMERA("Testing initial capture...");
     camera_fb_t* test_fb = esp_camera_fb_get();
     if (test_fb) {
-        Serial.printf("[Camera] Test capture successful: %dx%d, %d bytes\n", 
-                      test_fb->width, test_fb->height, test_fb->len);
+        logMessage("[Camera] Test capture successful: " + String(test_fb->width) + "x" + String(test_fb->height) + ", " + String(test_fb->len) + " bytes");
         esp_camera_fb_return(test_fb);
     } else {
-        Serial.println("[Camera] WARNING: Test capture failed, but continuing...");
+        LOG_WARNING("Camera test capture failed, but continuing...");
     }
     
-    Serial.println("[Camera] ✅ ESP32-CAM (AI Thinker) initialized successfully");
+    LOG_CAMERA("✅ ESP32-CAM (AI Thinker) initialized successfully");
     cameraInitialized = true;
     return true;
 }
@@ -135,11 +136,11 @@ CapturedImage captureImage() {
     CapturedImage result = {nullptr, 0, nullptr, false};
     
     if (!cameraInitialized) {
-        Serial.println("[Camera] ERROR: Camera not initialized");
+        LOG_ERROR("Camera not initialized");
         return result;
     }
     
-    Serial.println("[Camera] Starting image capture...");
+    LOG_CAMERA("Starting image capture...");
     yield(); // Prevent watchdog timeout
     
     // Turn on flash before capture
@@ -155,23 +156,19 @@ CapturedImage captureImage() {
     flashOff();
     
     if (!frameBuffer) {
-        Serial.println("[Camera] Error: Failed to capture image");
+        LOG_ERROR("Failed to capture image");
         return result;
     }
     
     // Check if frame buffer is valid
     if (frameBuffer->len == 0 || frameBuffer->buf == nullptr) {
-        Serial.println("[Camera] ERROR: Invalid frame buffer - zero length or null data");
-        Serial.printf("[Camera] Buffer details: len=%d, buf=%p\n", frameBuffer->len, frameBuffer->buf);
+        LOG_ERROR("Invalid frame buffer - zero length or null data");
+        logMessage("[Camera] Buffer details: len=" + String(frameBuffer->len) + ", buf=" + String((unsigned long)frameBuffer->buf, HEX));
         esp_camera_fb_return(frameBuffer);
         return result;
     }
     
-    Serial.printf("[Camera] ✅ Image captured successfully with flash: %dx%d, %d bytes, format: %d\n", 
-                  frameBuffer->width, 
-                  frameBuffer->height, 
-                  frameBuffer->len,
-                  frameBuffer->format);
+    logMessage("[Camera] ✅ Image captured successfully with flash: " + String(frameBuffer->width) + "x" + String(frameBuffer->height) + ", " + String(frameBuffer->len) + " bytes, format: " + String(frameBuffer->format));
     
     // Fill result structure
     result.frameBuffer = frameBuffer;
@@ -185,7 +182,7 @@ CapturedImage captureImage() {
 void releaseImage(CapturedImage& image) {
     if (image.isValid && image.frameBuffer != nullptr) {
         esp_camera_fb_return(image.frameBuffer);
-        Serial.println("[Camera] Image memory released");
+        LOG_CAMERA("Image memory released");
     }
     
     // Reset the structure
@@ -197,11 +194,11 @@ void releaseImage(CapturedImage& image) {
 
 void clearDMABuffers() {
     if (!cameraInitialized) {
-        Serial.println("[Camera] Cannot clear DMA - camera not initialized");
+        LOG_WARNING("Cannot clear DMA - camera not initialized");
         return;
     }
     
-    Serial.println("[Camera] Aggressively clearing DMA buffers...");
+    LOG_CAMERA("Aggressively clearing DMA buffers...");
     int cleared = 0;
     
     // Clear up to 10 pending frames (increased from 5)
@@ -210,7 +207,7 @@ void clearDMABuffers() {
         if (temp_fb) {
             esp_camera_fb_return(temp_fb);
             cleared++;
-            Serial.printf("[Camera] Cleared DMA buffer %d (size: %d bytes)\n", cleared, temp_fb->len);
+            logMessage("[Camera] Cleared DMA buffer " + String(cleared) + " (size: " + String(temp_fb->len) + " bytes)");
             delay(20); // Slightly longer delay between clears
         } else {
             break; // No more frames to clear
@@ -219,9 +216,9 @@ void clearDMABuffers() {
     }
     
     if (cleared > 0) {
-        Serial.printf("[Camera] ✅ Cleared %d DMA buffers\n", cleared);
+        logMessage("[Camera] ✅ Cleared " + String(cleared) + " DMA buffers");
     } else {
-        Serial.println("[Camera] No DMA buffers to clear");
+        LOG_CAMERA("No DMA buffers to clear");
     }
     
     // Add a brief pause after clearing
@@ -231,47 +228,153 @@ void clearDMABuffers() {
 void initFlash() {
     pinMode(FLASH_LED_PIN, OUTPUT);
     digitalWrite(FLASH_LED_PIN, LOW); // Ensure flash starts OFF
-    Serial.println("[Camera] Flash LED initialized (GPIO 4)");
+    LOG_CAMERA("Flash LED initialized (GPIO 4)");
 }
 
 void flashOn() {
     digitalWrite(FLASH_LED_PIN, HIGH);
-    Serial.println("[Camera] Flash ON");
+    LOG_DEBUG("Flash ON");
 }
 
 void flashOff() {
     digitalWrite(FLASH_LED_PIN, LOW);
-    Serial.println("[Camera] Flash OFF");
+    LOG_DEBUG("Flash OFF");
 }
 
 void checkCameraStatus() {
-    Serial.println("[Camera] === CAMERA STATUS CHECK ===");
-    Serial.printf("[Camera] Initialized: %s\n", cameraInitialized ? "YES" : "NO");
+    LOG_CAMERA("=== CAMERA STATUS CHECK ===");
+    logMessage("[Camera] Initialized: " + String(cameraInitialized ? "YES" : "NO"));
     
     if (!cameraInitialized) {
-        Serial.println("[Camera] Camera not initialized - run initCamera() first");
+        LOG_WARNING("Camera not initialized - run initCamera() first");
         return;
     }
     
     // Check sensor status
     sensor_t* sensor = esp_camera_sensor_get();
     if (sensor) {
-        Serial.println("[Camera] Sensor: DETECTED");
-        Serial.printf("[Camera] Sensor ID: 0x%02X\n", sensor->id.PID);
+        LOG_CAMERA("Sensor: DETECTED");
+        logMessage("[Camera] Sensor ID: 0x" + String(sensor->id.PID, HEX));
     } else {
-        Serial.println("[Camera] Sensor: NOT DETECTED - CRITICAL ERROR");
+        LOG_ERROR("Sensor: NOT DETECTED - CRITICAL ERROR");
     }
     
     // Try a quick test capture to check DMA status
-    Serial.println("[Camera] Testing DMA with quick capture...");
+    LOG_CAMERA("Testing DMA with quick capture...");
     camera_fb_t* test_fb = esp_camera_fb_get();
     if (test_fb) {
-        Serial.printf("[Camera] DMA Status: OK (captured %dx%d, %d bytes)\n", 
-                      test_fb->width, test_fb->height, test_fb->len);
+        logMessage("[Camera] DMA Status: OK (captured " + String(test_fb->width) + "x" + String(test_fb->height) + ", " + String(test_fb->len) + " bytes)");
         esp_camera_fb_return(test_fb);
     } else {
-        Serial.println("[Camera] DMA Status: FAILED - DMA overflow likely");
+        LOG_ERROR("DMA Status: FAILED - DMA overflow likely");
     }
     
-    Serial.println("[Camera] ========================");
+    LOG_CAMERA("========================");
+}
+
+void printImageAsBase64(const CapturedImage& image) {
+    if (!image.isValid) {
+        LOG_ERROR("Cannot print invalid image");
+        return;
+    }
+    
+    if (!image.frameBuffer || !image.imageData || image.imageSize == 0) {
+        LOG_ERROR("Invalid image data");
+        return;
+    }
+    
+    LOG_CAMERA("=== IMAGE DATA OUTPUT ===");
+    
+    // Send image metadata to Bluetooth for monitoring
+    logMessage("==IMAGE_START==");
+    logMessage("FORMAT: JPEG");
+    logMessage("SIZE: " + String(image.imageSize) + " bytes");
+    logMessage("DIMENSIONS: " + String(image.frameBuffer->width) + "x" + String(image.frameBuffer->height));
+    logMessage("TIMESTAMP: " + String(millis()));
+    logMessage("BASE64_DATA: [Starting transmission...]");
+    
+    // Keep structured output for Python decoder - these must stay as Serial.println()
+    Serial.println("==IMAGE_START==");
+    Serial.printf("FORMAT: JPEG\n");
+    Serial.printf("SIZE: %d bytes\n", image.imageSize);
+    Serial.printf("DIMENSIONS: %dx%d\n", image.frameBuffer->width, image.frameBuffer->height);
+    Serial.printf("TIMESTAMP: %lu\n", millis());
+    Serial.println("BASE64_DATA:");
+    
+    // Calculate required buffer size for Base64 encoding
+    // Base64 encoded size is approximately 4/3 of original size
+    size_t base64_len = 0;
+    
+    // First call to get required buffer size
+    int ret = mbedtls_base64_encode(NULL, 0, &base64_len, image.imageData, image.imageSize);
+    if (ret != MBEDTLS_ERR_BASE64_BUFFER_TOO_SMALL) {
+        LOG_ERROR("Failed to calculate Base64 buffer size");
+        return;
+    }
+    
+    // Print image data in chunks to avoid memory issues
+    const size_t CHUNK_SIZE = 3000; // Process 3KB at a time (4KB Base64 output)
+    const size_t LINE_LENGTH = 80;  // 80 characters per line for readability
+    
+    size_t processed = 0;
+    char base64_chunk[4096]; // Buffer for Base64 output
+    String bluetoothBase64Data = ""; // Accumulate Base64 for Bluetooth transmission
+    
+    while (processed < image.imageSize) {
+        // Calculate chunk size for this iteration
+        size_t current_chunk = min(CHUNK_SIZE, image.imageSize - processed);
+        
+        // Encode this chunk
+        size_t chunk_b64_len = 0;
+        ret = mbedtls_base64_encode((unsigned char*)base64_chunk, sizeof(base64_chunk), 
+                                   &chunk_b64_len, 
+                                   image.imageData + processed, 
+                                   current_chunk);
+        
+        if (ret != 0) {
+            logMessage("[Camera] ERROR: Base64 encoding failed at offset " + String(processed) + ", error: " + String(ret));
+            break;
+        }
+        
+        // Add to Bluetooth data string (will be chunked automatically by logger)
+        bluetoothBase64Data += String(base64_chunk).substring(0, chunk_b64_len);
+        
+        // Print the Base64 data to Serial in lines of specified length (for Python decoder)
+        for (size_t i = 0; i < chunk_b64_len; i += LINE_LENGTH) {
+            size_t line_len = min(LINE_LENGTH, chunk_b64_len - i);
+            
+            // Print line with null termination
+            for (size_t j = 0; j < line_len; j++) {
+                Serial.print((char)base64_chunk[i + j]);
+            }
+            Serial.println(); // New line after each chunk
+            
+            // Small delay to prevent overwhelming the serial buffer
+            if (i % (LINE_LENGTH * 10) == 0) {
+                delay(10);
+                yield();
+            }
+        }
+        
+        processed += current_chunk;
+        
+        // Progress indicator
+        float progress = (float)processed / image.imageSize * 100.0f;
+        if ((int)progress % 20 == 0) {
+            logMessage("[Camera] Progress: " + String((int)progress) + "%");
+        }
+        
+        yield(); // Prevent watchdog timeout
+    }
+    
+    // Send complete Base64 data to Bluetooth (will be automatically chunked)
+    if (bluetoothBase64Data.length() > 0) {
+        logLongMessage(bluetoothBase64Data, "[IMG_B64] ");
+    }
+    
+    // Keep structured output for Python decoder
+    Serial.println("==IMAGE_END==");
+    logMessage("==IMAGE_END==");
+    LOG_CAMERA("=== IMAGE DATA OUTPUT COMPLETE ===");
+    logMessage("[Camera] Total bytes processed: " + String(processed));
 }

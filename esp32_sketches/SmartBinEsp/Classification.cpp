@@ -1,5 +1,6 @@
 #include "Classification.h"
 #include <Arduino.h>
+#include "Logger.h"  // For centralized logging
 
 // Include model data
 extern const unsigned char waste_classification_model[];
@@ -21,18 +22,18 @@ const char* class_names[MODEL_OUTPUT_CLASSES] = {"metal", "misc", "paper", "plas
 static bool classificationInitialized = false;
 
 bool initClassification() {
-    Serial.println("[Classification] Initializing classification system...");
+    LOG_CLASSIFICATION("Initializing classification system...");
     
     // For now, just simulate initialization
     // TODO: Add TensorFlow Lite initialization once library issues are resolved
-    Serial.printf("[Classification] Model size: %d bytes\n", waste_classification_model_len);
-    Serial.printf("[Classification] Expected input: %dx%dx%d\n", MODEL_INPUT_WIDTH, MODEL_INPUT_HEIGHT, MODEL_INPUT_CHANNELS);
-    Serial.printf("[Classification] Output classes: %d\n", MODEL_OUTPUT_CLASSES);
+    logMessage("[Classification] Model size: " + String(waste_classification_model_len) + " bytes");
+    logMessage("[Classification] Expected input: " + String(MODEL_INPUT_WIDTH) + "x" + String(MODEL_INPUT_HEIGHT) + "x" + String(MODEL_INPUT_CHANNELS));
+    logMessage("[Classification] Output classes: " + String(MODEL_OUTPUT_CLASSES));
     
     delay(100);
     yield(); // Prevent watchdog timeout
     
-    Serial.println("[Classification] ✅ Classification initialized successfully (mock mode)");
+    LOG_CLASSIFICATION("✅ Classification initialized successfully (mock mode)");
     classificationInitialized = true;
     return true;
 }
@@ -49,21 +50,18 @@ ClassificationResult classifyImage(const CapturedImage& image) {
     
     if (!classificationInitialized) {
         result.errorMessage = "Classification system not initialized";
-        Serial.println("[Classification] ERROR: " + result.errorMessage);
+        LOG_ERROR(result.errorMessage);
         return result;
     }
     
     if (!image.isValid) {
         result.errorMessage = "Invalid input image";
-        Serial.println("[Classification] ERROR: " + result.errorMessage);
+        LOG_ERROR(result.errorMessage);
         return result;
     }
     
-    Serial.println("[Classification] Processing image (mock classification)...");
-    Serial.printf("[Classification] Image details: %d bytes, %dx%d pixels\n", 
-                  image.imageSize, 
-                  image.frameBuffer->width, 
-                  image.frameBuffer->height);
+    LOG_CLASSIFICATION("Processing image (mock classification)...");
+    logMessage("[Classification] Image details: " + String(image.imageSize) + " bytes, " + String(image.frameBuffer->width) + "x" + String(image.frameBuffer->height) + " pixels");
     
     yield(); // Prevent watchdog timeout
     
@@ -94,8 +92,7 @@ ClassificationResult classifyImage(const CapturedImage& image) {
     result.success = result.isValid;
     result.error = result.errorMessage;
     
-    Serial.printf("[Classification] ✅ Mock classification: %s (%.1f%% confidence)\n", 
-                  result.detectedClass.c_str(), result.confidence * 100.0f);
+    logMessage("[Classification] ✅ Mock classification: " + result.detectedClass + " (" + String(result.confidence * 100.0f, 1) + "% confidence)");
     
     return result;
 }
@@ -116,26 +113,20 @@ bool isConfidentResult(const ClassificationResult& result) {
 
 void printClassificationDetails(const ClassificationResult& result) {
     if (!result.isValid) {
-        Serial.println("[Classification] Invalid result: " + result.errorMessage);
+        LOG_WARNING("Invalid result: " + result.errorMessage);
         return;
     }
     
-    Serial.println("[Classification] === CLASSIFICATION DETAILS ===");
-    Serial.printf("[Classification] Class: %s\n", result.detectedClass.c_str());
-    Serial.printf("[Classification] Confidence: %.1f%% (%s)\n", 
-                  result.confidence * 100.0f,
-                  confidenceToString(result.confidence).c_str());
-    Serial.printf("[Classification] Meets Threshold: %s (%.1f%% required)\n", 
-                  isConfidentResult(result) ? "✅ YES" : "❌ NO",
-                  CONFIDENCE_THRESHOLD * 100.0f);
+    LOG_CLASSIFICATION("=== CLASSIFICATION DETAILS ===");
+    logMessage("[Classification] Class: " + result.detectedClass);
+    logMessage("[Classification] Confidence: " + String(result.confidence * 100.0f, 1) + "% (" + confidenceToString(result.confidence) + ")");
+    logMessage("[Classification] Meets Threshold: " + String(isConfidentResult(result) ? "✅ YES" : "❌ NO") + " (" + String(CONFIDENCE_THRESHOLD * 100.0f, 1) + "% required)");
     
-    Serial.println("[Classification] All class confidences:");
+    LOG_CLASSIFICATION("All class confidences:");
     for (int i = 0; i < MODEL_OUTPUT_CLASSES; i++) {
-        Serial.printf("[Classification] %s: %.1f%%\n", 
-                     class_names[i], 
-                     result.classConfidences[i] * 100.0f);
+        logMessage("[Classification] " + String(class_names[i]) + ": " + String(result.classConfidences[i] * 100.0f, 1) + "%");
     }
-    Serial.println("[Classification] ============================");
+    LOG_CLASSIFICATION("============================");
 }
 
 String confidenceToString(float confidence) {
@@ -163,16 +154,15 @@ void normalizePixels(float* image_data, int pixel_count) {
 
 void printModelInfo() {
     if (!classificationInitialized) {
-        Serial.println("[Classification] Model not initialized");
+        LOG_WARNING("Model not initialized");
         return;
     }
     
-    Serial.println("[Classification] === MODEL INFO (MOCK) ===");
-    Serial.printf("[Classification] Model size: %d bytes\n", waste_classification_model_len);
-    Serial.printf("[Classification] Input shape: [1, %d, %d, %d]\n",
-                 MODEL_INPUT_HEIGHT, MODEL_INPUT_WIDTH, MODEL_INPUT_CHANNELS);
-    Serial.printf("[Classification] Output classes: %d\n", MODEL_OUTPUT_CLASSES);
-    Serial.println("[Classification] Classes: metal, misc, paper, plastic");
-    Serial.println("[Classification] Mode: MOCK (for testing compilation)");
-    Serial.println("[Classification] ==================");
+    LOG_CLASSIFICATION("=== MODEL INFO (MOCK) ===");
+    logMessage("[Classification] Model size: " + String(waste_classification_model_len) + " bytes");
+    logMessage("[Classification] Input shape: [1, " + String(MODEL_INPUT_HEIGHT) + ", " + String(MODEL_INPUT_WIDTH) + ", " + String(MODEL_INPUT_CHANNELS) + "]");
+    logMessage("[Classification] Output classes: " + String(MODEL_OUTPUT_CLASSES));
+    logMessage("[Classification] Classes: metal, misc, paper, plastic");
+    LOG_CLASSIFICATION("Mode: MOCK (for testing compilation)");
+    LOG_CLASSIFICATION("==================");
 }

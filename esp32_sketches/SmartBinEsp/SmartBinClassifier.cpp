@@ -1,4 +1,5 @@
 #include "SmartBinClassifier.h"
+#include "Logger.h"  // For centralized logging
 
 SmartBinClassifier::SmartBinClassifier() {
     cameraInitialized = false;
@@ -15,18 +16,18 @@ bool SmartBinClassifier::initCamera() {
 
     // Initialize camera using the Camera module
     if (!::initCamera()) {
-        Serial.println("Failed to initialize camera via Camera module");
+        LOG_ERROR("Failed to initialize camera via Camera module");
         return false;
     }
 
     // Initialize classification system
     if (!initClassification()) {
-        Serial.println("Failed to initialize classification system");
+        LOG_ERROR("Failed to initialize classification system");
         return false;
     }
 
     cameraInitialized = true;
-    Serial.println("SmartBinClassifier initialized successfully");
+    LOG_CLASSIFIER("SmartBinClassifier initialized successfully");
     return true;
 }
 
@@ -35,9 +36,8 @@ void SmartBinClassifier::deinitCamera() {
         return;
     }
 
-    // The Camera module handles deinitialization
     cameraInitialized = false;
-    Serial.println("SmartBinClassifier deinitialized");
+    LOG_CLASSIFIER("SmartBinClassifier deinitialized");
 }
 
 ClassificationResult SmartBinClassifier::captureAndClassify() {
@@ -60,6 +60,10 @@ ClassificationResult SmartBinClassifier::captureAndClassify() {
         result.errorMessage = "Failed to capture image";
         return result;
     }
+
+    // Print captured image data for verification
+    LOG_CLASSIFIER("Printing captured image data...");
+    printImageAsBase64(image);
 
     // Classify using Classification module
     result = classifyImage(image);

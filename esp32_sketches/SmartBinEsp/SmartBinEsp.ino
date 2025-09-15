@@ -3,8 +3,8 @@
 #include "Ultrasonic.h"
 #include "Camera.h"
 #include "Classification.h"
+#include "Logger.h"  // For centralized logging
 #include "BluetoothSerial.h"
-
 
 String device_name = "SmartBin_ESP32";
 
@@ -18,11 +18,8 @@ String device_name = "SmartBin_ESP32";
 #error Serial Port Profile for Bluetooth is not available or not enabled. It is only available for the ESP32 chip.
 #endif
 
-// Create Bluetooth Serial object
+// Create Bluetooth Serial object (used by Logger module)
 BluetoothSerial SerialBT;
-
-// Bluetooth status flag
-bool bluetoothEnabled = false;
 
 // Timing & state
 unsigned long lastTrigger = 0;
@@ -49,88 +46,88 @@ void setup() {
   
   Serial.println("[Boot] Starting SmartBin initialization...");
   
-  // Initialize Bluetooth Serial
-  Serial.println("[Boot] Initializing Bluetooth...");
+  // Initialize Logger module first
+  Serial.println("[Boot] Initializing Logger module...");
+  bool loggerSuccess = initLogger(device_name);
   
-  // Add error handling for Bluetooth initialization
-  if (!SerialBT.begin(device_name)) {
-    Serial.println("[Boot] ERROR: Bluetooth initialization failed");
-    bluetoothEnabled = false;
-    // Continue without Bluetooth
+  if (loggerSuccess) {
+    LOG_BOOT("✅ Logger module initialized successfully");
   } else {
-    Serial.printf("[Boot] Bluetooth Serial Started - Device Name: \"%s\"\n", device_name.c_str());
-    bluetoothEnabled = true;
+    LOG_BOOT("⚠️ Logger initialized with Serial only - Bluetooth unavailable");
   }
+  
+  // Print logger status
+  printLoggerStatus();
 
   // TODO: Uncomment out servo init when ready
   // // Initialize modules one by one with debug messages
-  // logMessage("[Boot] Initializing Servos...");
+  // LOG_BOOT("Initializing Servos...");
   // yield(); // Prevent watchdog timeout
   // 
   // // Wrap in try-catch to handle potential crashes
   // try {
   //   initServos();
   //   delay(1000); // Give system time to breathe
-  //   logMessage("[Boot] ✅ Servos initialized");
+  //   LOG_BOOT("✅ Servos initialized");
   // } catch (...) {
-  //   logMessage("[Boot] ⚠️ Warning: Servo initialization failed");
+  //   LOG_BOOT("⚠️ Warning: Servo initialization failed");
   // }
 
   // TODO: Uncomment out LED init when ready
-  // logMessage("[Boot] Initializing LEDs...");
+  // LOG_BOOT("Initializing LEDs...");
   // yield(); // Prevent watchdog timeout
   //
   // try {
   //   initLEDs();
   //   delay(100); // Give system time to breathe
-  //   logMessage("[Boot] ✅ LEDs initialized");
+  //   LOG_BOOT("✅ LEDs initialized");
   // } catch (...) {
-  //   logMessage("[Boot] ⚠️ Warning: LED initialization failed");
+  //   LOG_BOOT("⚠️ Warning: LED initialization failed");
   // }
 
   // TODO: Uncomment out ultrasonic init when ready
-  logMessage("[Boot] Initializing Ultrasonic...");
+  LOG_BOOT("Initializing Ultrasonic...");
   yield(); // Prevent watchdog timeout
   
   try {
     initUltrasonic();
     delay(100); // Give system time to breathe
-    logMessage("[Boot] ✅ Ultrasonic initialized");
+    LOG_BOOT("✅ Ultrasonic initialized");
   } catch (...) {
-    logMessage("[Boot] ⚠️ Warning: Ultrasonic initialization failed");
+    LOG_BOOT("⚠️ Warning: Ultrasonic initialization failed");
   }
 
   // TODO: Uncomment out camera init when ready
-  logMessage("[Boot] Initializing Camera...");
+  LOG_BOOT("Initializing Camera...");
   yield(); // Prevent watchdog timeout
   
   try {
     if (initCamera()) {
       delay(100); // Give system time to breathe
-      logMessage("[Boot] ✅ Camera initialized");
+      LOG_BOOT("✅ Camera initialized");
     } else {
-      logMessage("[Boot] ⚠️ Warning: Camera initialization failed");
+      LOG_BOOT("⚠️ Warning: Camera initialization failed");
     }
   } catch (...) {
-    logMessage("[Boot] ⚠️ Warning: Camera initialization crashed");
+    LOG_BOOT("⚠️ Warning: Camera initialization crashed");
   }
 
-  logMessage("[Boot] Initializing Classification...");
+  LOG_BOOT("Initializing Classification...");
   yield(); // Prevent watchdog timeout
   
   try {
     if (initClassification()) {
       delay(100); // Give system time to breathe
-      logMessage("[Boot] ✅ Classification initialized");
+      LOG_BOOT("✅ Classification initialized");
     } else {
-      logMessage("[Boot] ⚠️ Warning: Classification initialization failed");
+      LOG_BOOT("⚠️ Warning: Classification initialization failed");
     }
   } catch (...) {
-    logMessage("[Boot] ⚠️ Warning: Classification initialization crashed");
+    LOG_BOOT("⚠️ Warning: Classification initialization crashed");
   }
 
   // // Initialize all mechanisms to "home" position with error handling
-  // logMessage("[Boot] Moving to home position...");
+  // LOG_BOOT("Moving to home position...");
   // yield(); // Prevent watchdog timeout
   
   // try {
@@ -158,13 +155,13 @@ void setup() {
   // try {
   //   openBinLid();
   //   delay(100); // Give system time to breathe
-  //   logMessage("[Boot] ✅ Bin lid opened");
+  //   LOG_BOOT("✅ Bin lid opened");
   // } catch (...) {
-  //   logMessage("[Boot] ⚠️ Warning: Bin lid operation failed");
+  //   LOG_BOOT("⚠️ Warning: Bin lid operation failed");
   // }
 
-  logMessage("[System] SmartBin Ready and Initialized");
-  logMessage("[System] Watchdog timer reset successfully avoided!");
+  LOG_SYSTEM("SmartBin Ready and Initialized");
+  LOG_SYSTEM("Watchdog timer reset successfully avoided!");
 }
 
 void loop() {
@@ -244,22 +241,6 @@ void loop() {
   delay(100);
 }
 
-// === Logging Function ===
-void logMessage(String message) {
-  // Always send to Serial
-  Serial.println(message);
-  
-  // Only send to Bluetooth if it's enabled and has a connected client
-  if (bluetoothEnabled && SerialBT.available() && SerialBT.hasClient()) {
-    try {
-      SerialBT.println(message);
-    } catch (...) {
-      // Ignore Bluetooth errors to prevent crashes
-      Serial.println("[Warning] Bluetooth send failed");
-    }
-  }
-}
-
 // === High-Level Helper Functions ===
 
 bool isItemDetected() {
@@ -303,6 +284,10 @@ String captureAndClassify() {
   }
   
   logMessage("[Camera] ✅ Image captured successfully");
+  
+  // Print captured image data for verification (Base64 transmission)
+  logMessage("[Camera] Printing image data for verification...");
+  printImageAsBase64(image);
   
   // Step 2: Classify image using Classification module
   logMessage("[Classification] Starting image classification...");

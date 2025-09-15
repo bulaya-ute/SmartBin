@@ -19,6 +19,7 @@ CapturedImage captureImage();
 void releaseImage(CapturedImage& image);
 void clearDMABuffers(); // New function to manually clear DMA buffers
 void checkCameraStatus(); // Diagnostic function to check camera health
+void printImageAsBase64(const CapturedImage& image); // Print image data for verification
 
 // Flash control functions
 void initFlash();
