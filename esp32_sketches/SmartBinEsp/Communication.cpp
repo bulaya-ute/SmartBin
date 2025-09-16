@@ -5,11 +5,13 @@ Communication::Communication(BluetoothSerial* bt) :
     bluetooth(bt),
     currentState(COMM_INIT),
     lastMessageTime(0),
-    lastHeartbeatTime(0),
     lastBroadcastTime(0),
     consecutiveTimeouts(0),
+    laptopConnected(false),
     currentImageId(""),
-    laptopConnected(false) {
+    totalImageParts(0),
+    imageParts(nullptr),
+    imageTransmissionComplete(false) {
 }
 
 void Communication::begin() {
@@ -56,81 +58,75 @@ void Communication::update() {
 void Communication::handleWaitingLaptopState() {
     unsigned long now = millis();
     
-    // Check for incoming messages
-    String messageType;
-    DynamicJsonDocument data(1024);
+    // Only proceed if Bluetooth is actually connected
+    if (!bluetooth || !bluetooth->connected()) {
+        lastBroadcastTime = 0;
+        return;
+    }
+
+    // String receivedLine = bluetooth.read();
+
     
-    if (receiveMessage(messageType, data)) {
-        if (messageType == MSG_LAPTOP_READY) {
-            logCommunicationEvent("Laptop ready signal received");
-            laptopConnected = true;
-            setState(COMM_CONNECTED);
+    // Check for incoming protocol messages
+    String code, content;
+    if (receiveProtocolMessage(code, content)) {
+        logCommunicationEvent("Received protocol message", "Code: " + code);
+        
+        if (code == CODE_RTC01) {
+            logCommunicationEvent("Valid RTC01 received from laptop", content);
             
-            // Send confirmation
-            DynamicJsonDocument response(512);
-            response["device_id"] = "SmartBin_ESP32";
-            response["status"] = "connected";
-            sendMessage("CONNECTION_CONFIRMED", response);
-            return;
+            // Send connection confirmation
+            if (sendProtocolMessage(CODE_RTC02, "ESP32 connection confirmed")) {
+                laptopConnected = true;
+                setState(COMM_CONNECTED);
+                logCommunicationEvent("✅ Laptop connection established");
+                return;
+            } else {
+                logCommunicationEvent("❌ Failed to send RTC02 confirmation");
+            }
+        } else {
+            logCommunicationEvent("❌ Unexpected protocol message during laptop wait", 
+                                "Expected: RTC01, Got: " + code);
         }
     }
     
-    // Broadcast waiting message periodically
+    // Broadcast ready message periodically (only when bluetooth connected)
     if (now - lastBroadcastTime > WAITING_BROADCAST_INTERVAL_MS) {
-        DynamicJsonDocument waitingData(512);
-        waitingData["device_id"] = "SmartBin_ESP32";
-        waitingData["version"] = "1.0";
-        JsonArray capabilities = waitingData.createNestedArray("capabilities");
-        capabilities.add("image_capture");
-        capabilities.add("classification");
-        
-        if (sendMessage(MSG_WAITING_LAPTOP, waitingData)) {
-            logCommunicationEvent("Broadcasting laptop connection request");
+        if (sendProtocolMessage(CODE_RTC00, "ESP32 ready to connect")) {
+            logCommunicationEvent("📡 Broadcasting RTC00 ready message");
             lastBroadcastTime = now;
+        } else {
+            logCommunicationEvent("❌ Failed to send RTC00 message");
         }
     }
 }
 
 void Communication::handleConnectedState() {
-    // Check for heartbeats or disconnection
-    String messageType;
-    DynamicJsonDocument data(512);
-    
-    if (receiveMessage(messageType, data)) {
-        if (messageType == MSG_HEARTBEAT) {
-            lastHeartbeatTime = millis();
-            logCommunicationEvent("Heartbeat received from laptop");
+    // In connected state, just listen for incoming messages
+    // Main communication happens through sendImageForClassification
+    String code, content;
+    if (receiveProtocolMessage(code, content)) {
+        if (code.startsWith(CODE_ERR_PREFIX)) {
+            logCommunicationEvent("Error received from laptop", content);
+            // Could handle specific errors here
+        } else {
+            logCommunicationEvent("Unexpected message in connected state", code + " " + content);
         }
-    }
-    
-    // Check for heartbeat timeout
-    unsigned long now = millis();
-    if (laptopConnected && (now - lastHeartbeatTime) > (HEARTBEAT_INTERVAL_MS * 2)) {
-        logCommunicationEvent("Heartbeat timeout - laptop may be disconnected");
-        handleDisconnection();
     }
 }
 
 void Communication::handleWaitingResultState() {
-    String messageType;
-    DynamicJsonDocument data(1024);
+    String code, content;
     
-    if (receiveMessage(messageType, data)) {
-        if (messageType == MSG_CLASSIFICATION_RESULT) {
-            logCommunicationEvent("Classification result received", 
-                                data["classification"].as<String>());
+    if (receiveProtocolMessage(code, content)) {
+        if (code == CODE_CLS01) {
+            logCommunicationEvent("Classification result received", content);
             setState(COMM_CONNECTED);
             consecutiveTimeouts = 0;
             
-        } else if (messageType == MSG_CLASSIFICATION_ERROR) {
-            String errorCode = data["error_code"];
-            logCommunicationEvent("Classification error received", errorCode);
-            
-            if (data["retry_suggested"].as<bool>()) {
-                setState(COMM_CONNECTED); // Will retry
-            } else {
-                setState(COMM_ERROR);
-            }
+        } else if (code.startsWith(CODE_ERR_PREFIX)) {
+            logCommunicationEvent("Classification error received", content);
+            setState(COMM_CONNECTED); // Will retry
             consecutiveTimeouts = 0;
         }
     }
@@ -142,68 +138,67 @@ void Communication::handleErrorState() {
     reset();
 }
 
-bool Communication::sendMessage(const String& messageType, const JsonDocument& data) {
+bool Communication::sendProtocolMessage(const String& code, const String& content) {
     if (!bluetooth || !bluetooth->connected()) {
         return false;
     }
     
-    DynamicJsonDocument message(2048);
-    message["type"] = messageType;
-    message["timestamp"] = millis();
-    message["data"] = data;
-    
-    String messageStr;
-    serializeJson(message, messageStr);
-    
-    // Send with delimiters for parsing
-    bluetooth->println("===MSG_START===");
-    bluetooth->println(messageStr);
-    bluetooth->println("===MSG_END===");
+    String message = code + " " + content;
+    bluetooth->println(message);
     
     lastMessageTime = millis();
     return true;
 }
 
-bool Communication::receiveMessage(String& messageType, JsonDocument& data) {
+bool Communication::receiveProtocolMessage(String& code, String& content) {
     if (!bluetooth || !bluetooth->available()) {
         return false;
     }
     
-    String line;
-    bool inMessage = false;
-    String messageBuffer = "";
-    
     while (bluetooth->available()) {
-        char c = bluetooth->read();
-        if (c == '\n') {
-            line.trim();
-            
-            if (line == "===MSG_START===") {
-                inMessage = true;
-                messageBuffer = "";
-            } else if (line == "===MSG_END===") {
-                if (inMessage) {
-                    // Parse the message
-                    DynamicJsonDocument message(2048);
-                    DeserializationError error = deserializeJson(message, messageBuffer);
-                    
-                    if (!error) {
-                        messageType = message["type"].as<String>();
-                        data = message["data"];
-                        return true;
-                    }
-                }
-                inMessage = false;
-            } else if (inMessage) {
-                messageBuffer += line + "\n";
-            }
-            line = "";
-        } else {
-            line += c;
+        String line = bluetooth->readStringUntil('\n');
+        line.trim();
+        Serial.print("Received line: ");
+        Serial.println(line);
+
+        if (isProtocolMessage(line)) {
+            code = extractCode(line);
+            content = extractContent(line);
+            Serial.println("Code: " + code + ", Content: " + content);
+            return true;
         }
+        // Non-protocol messages are ignored during protocol communication
+        // but could be logged for debugging
     }
     
     return false;
+}
+
+bool Communication::isProtocolMessage(const String& line) {
+    if (line.length() < 5) return false; // Need at least "CODE"
+    
+    String code = line.substring(0, 5);
+    if (line.charAt(5) != ' ' && line.length() > 5) return false; // Must have space after code
+    
+    // Check if it's a valid protocol code
+    return (code == CODE_RTC00 || code == CODE_RTC01 || code == CODE_RTC02 ||
+            code == CODE_PA000 || code.startsWith(CODE_PA_PREFIX) ||
+            code.startsWith(CODE_PX_PREFIX) || code == CODE_CLS01 ||
+            code.startsWith(CODE_ERR_PREFIX));
+}
+
+String Communication::extractCode(const String& line) {
+    if (line.length() >= 5) {
+        return line.substring(0, 5);
+    }
+    return "";
+}
+
+String Communication::extractContent(const String& line) {
+    if (line.length() > 6) {
+        return line.substring(6); // Skip "CODE "
+    }
+    return "";
 }
 
 bool Communication::sendImageForClassification(const uint8_t* imageData, size_t imageSize, 
@@ -213,18 +208,105 @@ bool Communication::sendImageForClassification(const uint8_t* imageData, size_t 
     }
     
     setState(COMM_SENDING_IMAGE);
-    currentImageId = generateImageId();
+    currentImageId = "img_" + String(millis());
     
+    logCommunicationEvent("Starting image transmission", 
+                         "Size: " + String(imageSize) + " bytes, ID: " + currentImageId);
+    
+    // Step 1: Prepare image transmission (convert to Base64 and split into parts)
+    if (!prepareImageTransmission(imageData, imageSize, width, height)) {
+        setState(COMM_ERROR);
+        return false;
+    }
+    
+    // Step 2: Send metadata header (PA000)
+    String metadata = "type:image, size:" + String(imageSize) + 
+                     ", format:JPEG, width:" + String(width) + 
+                     ", height:" + String(height) + 
+                     ", id:" + currentImageId +
+                     ", parts:" + String(totalImageParts);
+    
+    if (!sendProtocolMessage(CODE_PA000, metadata)) {
+        logCommunicationEvent("Failed to send PA000 metadata");
+        cleanupImageTransmission();
+        setState(COMM_ERROR);
+        return false;
+    }
+    
+    logCommunicationEvent("Sent PA000 metadata", "Parts: " + String(totalImageParts));
+    
+    // Step 3: Send image parts (PA001, PA002, ..., PX###)
+    for (int i = 0; i < totalImageParts; i++) {
+        String partCode;
+        if (i == totalImageParts - 1) {
+            // Last part uses PX code
+            String partNumber = String(i + 1);
+            while (partNumber.length() < 3) {
+                partNumber = "0" + partNumber;
+            }
+            partCode = CODE_PX_PREFIX + partNumber;
+        } else {
+            // Regular parts use PA code
+            String partNumber = String(i + 1);
+            while (partNumber.length() < 3) {
+                partNumber = "0" + partNumber;
+            }
+            partCode = CODE_PA_PREFIX + partNumber;
+        }
+        
+        if (!sendProtocolMessage(partCode, imageParts[i])) {
+            logCommunicationEvent("Failed to send image part", String(i + 1));
+            cleanupImageTransmission();
+            setState(COMM_ERROR);
+            return false;
+        }
+        
+        // Small delay to prevent overwhelming the connection
+        delay(10);
+    }
+    
+    logCommunicationEvent("Image transmission complete", "Sent " + String(totalImageParts) + " parts");
+    cleanupImageTransmission();
+    
+    // Step 4: Wait for classification result
+    setState(COMM_WAITING_RESULT);
+    
+    // Wait for CLS01 response
+    unsigned long startTime = millis();
+    while (currentState == COMM_WAITING_RESULT && 
+           (millis() - startTime) < LAPTOP_RESPONSE_TIMEOUT_MS) {
+        
+        String code, content;
+        if (receiveProtocolMessage(code, content)) {
+            if (code == CODE_CLS01) {
+                result = content; // e.g. "plastic 0.85"
+                setState(COMM_CONNECTED);
+                logCommunicationEvent("✅ Classification received", result);
+                return true;
+            } else if (code.startsWith(CODE_ERR_PREFIX)) {
+                logCommunicationEvent("❌ Classification error", content);
+                setState(COMM_CONNECTED);
+                return false;
+            }
+        }
+        
+        delay(100);
+        yield();
+    }
+    
+    // Timeout
+    logCommunicationEvent("❌ Classification timeout");
+    handleTimeout();
+    return false;
+}
+
+bool Communication::prepareImageTransmission(const uint8_t* imageData, size_t imageSize, 
+                                           int width, int height) {
     // Convert image to Base64
-    logCommunicationEvent("Converting image to Base64", 
-                         "Size: " + String(imageSize) + " bytes");
-    
-    // Calculate Base64 size
     size_t base64_len = 0;
     int ret = mbedtls_base64_encode(NULL, 0, &base64_len, imageData, imageSize);
     if (ret != MBEDTLS_ERR_BASE64_BUFFER_TOO_SMALL) {
         logCommunicationEvent("Failed to calculate Base64 size");
-        setState(COMM_ERROR);
         return false;
     }
     
@@ -232,7 +314,6 @@ bool Communication::sendImageForClassification(const uint8_t* imageData, size_t 
     char* base64_buffer = (char*)malloc(base64_len + 1);
     if (!base64_buffer) {
         logCommunicationEvent("Failed to allocate Base64 buffer");
-        setState(COMM_ERROR);
         return false;
     }
     
@@ -241,45 +322,86 @@ bool Communication::sendImageForClassification(const uint8_t* imageData, size_t 
     if (ret != 0) {
         free(base64_buffer);
         logCommunicationEvent("Base64 encoding failed");
-        setState(COMM_ERROR);
         return false;
     }
     
     base64_buffer[base64_len] = '\0';
-    
-    // Create image data message
-    DynamicJsonDocument imageMsg(base64_len + 1024);
-    imageMsg["image_id"] = currentImageId;
-    imageMsg["format"] = "JPEG";
-    imageMsg["size"] = imageSize;
-    imageMsg["width"] = width;
-    imageMsg["height"] = height;
-    imageMsg["base64_data"] = String(base64_buffer);
-    
+    String base64String = String(base64_buffer);
     free(base64_buffer);
     
-    logCommunicationEvent("Sending image for classification", currentImageId);
+    // Split into parts (max ~200 chars per part to avoid Bluetooth buffer issues)
+    const int maxPartSize = 200;
+    totalImageParts = (base64String.length() + maxPartSize - 1) / maxPartSize;
     
-    if (sendMessage(MSG_IMAGE_DATA, imageMsg)) {
-        setState(COMM_WAITING_RESULT);
-        return true;
-    } else {
-        setState(COMM_ERROR);
+    if (totalImageParts > MAX_IMAGE_PARTS) {
+        logCommunicationEvent("Image too large", "Parts: " + String(totalImageParts));
         return false;
     }
+    
+    // Allocate parts array
+    imageParts = new String[totalImageParts];
+    if (!imageParts) {
+        logCommunicationEvent("Failed to allocate parts array");
+        return false;
+    }
+    
+    // Split the Base64 string into parts
+    for (int i = 0; i < totalImageParts; i++) {
+        int startPos = i * maxPartSize;
+        int endPos = min(startPos + maxPartSize, (int)base64String.length());
+        imageParts[i] = base64String.substring(startPos, endPos);
+    }
+    
+    logCommunicationEvent("Image prepared for transmission", 
+                         "Base64 length: " + String(base64String.length()) + 
+                         ", Parts: " + String(totalImageParts));
+    
+    return true;
 }
 
+void Communication::cleanupImageTransmission() {
+    if (imageParts) {
+        delete[] imageParts;
+        imageParts = nullptr;
+    }
+    totalImageParts = 0;
+    currentImageId = "";
+}
 bool Communication::waitForLaptopConnection() {
     setState(COMM_WAITING_LAPTOP);
+    logCommunicationEvent("Starting laptop connection wait - waiting for RTC01");
     
     unsigned long startTime = millis();
     const unsigned long maxWaitTime = 60000; // 1 minute max wait
     
     while (currentState == COMM_WAITING_LAPTOP && 
            (millis() - startTime) < maxWaitTime) {
-        update();
+        
+        // Check if bluetooth is connected first
+        if (!bluetooth || !bluetooth->connected()) {
+            static unsigned long lastConnectionLog = 0;
+            if (millis() - lastConnectionLog > 5000) { // Log every 5 seconds
+                logCommunicationEvent("Waiting for Bluetooth device connection...");
+                lastConnectionLog = millis();
+            }
+        } else {
+            // Bluetooth is connected, but we need the laptop protocol message
+            static unsigned long lastProtocolLog = 0;
+            if (millis() - lastProtocolLog > 3000) { // Log every 3 seconds
+                logCommunicationEvent("Bluetooth connected - waiting for RTC01 message");
+                lastProtocolLog = millis();
+            }
+        }
+        
+        update(); // This will handle incoming RTC01
         delay(100);
         yield();
+    }
+    
+    if (laptopConnected) {
+        logCommunicationEvent("✅ Laptop connection established successfully");
+    } else {
+        logCommunicationEvent("⚠️ Laptop connection timeout - no RTC01 received");
     }
     
     return laptopConnected;
@@ -309,7 +431,7 @@ void Communication::reset() {
     logCommunicationEvent("Resetting communication system");
     laptopConnected = false;
     consecutiveTimeouts = 0;
-    currentImageId = "";
+    cleanupImageTransmission();
     setState(COMM_WAITING_LAPTOP);
 }
 
@@ -322,29 +444,14 @@ void Communication::setState(CommunicationState newState) {
     }
 }
 
-String Communication::generateImageId() {
-    return "img_" + String(millis());
-}
-
-bool Communication::sendStatusUpdate(const String& status) {
-    DynamicJsonDocument statusData(512);
-    statusData["status"] = status;
-    statusData["last_image_id"] = currentImageId;
-    statusData["uptime_ms"] = millis();
-    
-    return sendMessage(MSG_STATUS_UPDATE, statusData);
-}
-
 // Helper functions
 String stateToString(CommunicationState state) {
     switch (state) {
         case COMM_INIT: return "INIT";
         case COMM_WAITING_LAPTOP: return "WAITING_LAPTOP";
         case COMM_CONNECTED: return "CONNECTED";
-        case COMM_CAPTURING: return "CAPTURING";
         case COMM_SENDING_IMAGE: return "SENDING_IMAGE";
         case COMM_WAITING_RESULT: return "WAITING_RESULT";
-        case COMM_PROCESSING_RESULT: return "PROCESSING_RESULT";
         case COMM_ERROR: return "ERROR";
         default: return "UNKNOWN";
     }

@@ -89,10 +89,9 @@ void setup() {
   //   LOG_BOOT("⚠️ Warning: LED initialization failed");
   // }
 
-  // TODO: Uncomment out ultrasonic init when ready
+  // Initialize ultrasonic sensor
   LOG_BOOT("Initializing Ultrasonic...");
   yield(); // Prevent watchdog timeout
-  
   try {
     initUltrasonic();
     delay(100); // Give system time to breathe
@@ -101,10 +100,9 @@ void setup() {
     LOG_BOOT("⚠️ Warning: Ultrasonic initialization failed");
   }
 
-  // TODO: Uncomment out camera init when ready
+  // Initialize camera
   LOG_BOOT("Initializing Camera...");
   yield(); // Prevent watchdog timeout
-  
   try {
     if (initCamera()) {
       delay(100); // Give system time to breathe
@@ -118,7 +116,6 @@ void setup() {
 
   LOG_BOOT("Initializing Classification...");
   yield(); // Prevent watchdog timeout
-  
   try {
     if (initClassification()) {
       delay(100); // Give system time to breathe
@@ -172,19 +169,22 @@ void setup() {
     comm.begin();
     LOG_BOOT("✅ Communication protocol initialized");
     
-    // Wait for laptop connection
-    LOG_BOOT("Waiting for laptop connection...");
+    // Wait for laptop connection - this is REQUIRED for sorting to work
+    LOG_BOOT("⏳ Waiting for laptop connection (required for classification)...");
     if (comm.waitForLaptopConnection()) {
-      LOG_BOOT("✅ Laptop connected successfully!");
+      LOG_BOOT("✅ Laptop connected successfully! Sorting will be enabled.");
     } else {
-      LOG_BOOT("⚠️ Warning: Laptop connection timeout - continuing without laptop");
+      LOG_BOOT("⚠️ Warning: Laptop connection timeout");
+      LOG_BOOT("📋 SmartBin will wait for laptop connection before sorting");
+      LOG_BOOT("💡 Make sure laptop script is running and sending MSG_LAPTOP_READY");
     }
     
   } catch (...) {
     LOG_BOOT("⚠️ Warning: Communication initialization failed");
   }
 
-  LOG_SYSTEM("SmartBin Ready and Initialized");
+  LOG_SYSTEM("SmartBin Hardware Initialized");
+  LOG_SYSTEM("Note: Sorting requires laptop connection");
   LOG_SYSTEM("Watchdog timer reset successfully avoided!");
 }
 
@@ -203,6 +203,17 @@ void loop() {
       Serial.printf("[Warning] Low memory: %d bytes free\n", freeHeap);
     }
     lastMemCheck = millis();
+  }
+  
+  // CRITICAL: Only run sorting logic when laptop is properly connected
+  if (!comm.isLaptopConnected()) {
+    // Log waiting status occasionally
+    static unsigned long lastWaitingLog = 0;
+    if (millis() - lastWaitingLog > 5000) { // Every 5 seconds
+      LOG_SYSTEM("Waiting for laptop connection before starting sorting...");
+      lastWaitingLog = millis();
+    }
+    return; // Don't run sorting logic without laptop
   }
   
   if (isProcessing) return; // Don't interrupt ongoing cycle
