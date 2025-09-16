@@ -1,25 +1,28 @@
 #!/usr/bin/env python3
 """
-SmartBin Unified Communication Script - Simple Protocol
-Uses the new 5-character code protocol: RTC, PA, PX, CLS, ERR
+SmartBin PySerial Protocol Implementation
+Uses PySerial for cleaner Bluetooth communication without subprocess issues
 """
 
+import serial
 import subprocess
 import threading
-import queue
 import time
 import base64
 import io
-import re
+import random
 from PIL import Image
 from typing import Optional, Tuple
 
-class SmartBinSimpleProtocol:
-    def __init__(self, esp32_mac: str = "EC:E3:34:15:F2:62", rfcomm_device: str = "/dev/rfcomm0"):
+class SmartBinPySerialProtocol:
+    def __init__(self, esp32_mac: str = "EC:E3:34:15:F2:62", rfcomm_device: str = "/dev/rfcomm0", baudrate: int = 115200):
         self.esp32_mac = esp32_mac
         self.rfcomm_device = rfcomm_device
+        self.baudrate = baudrate
+        self.ser = None
         self.running = False
         self.connected = False
+        self.rfcomm_bound = False
         
         # Protocol state
         self.waiting_for_image = False
@@ -28,15 +31,16 @@ class SmartBinSimpleProtocol:
         self.expected_parts = 0
         
         # Threading
-        self.read_process = None
-        self.message_queue = queue.Queue()
         self.reader_thread = None
         
     def start(self):
         """Start the communication system"""
-        print("🚀 Starting SmartBin Simple Protocol Communication")
+        print("🚀 Starting SmartBin PySerial Protocol Communication")
         
-        if not self._setup_rfcomm():
+        if not self._setup_rfcomm_binding():
+            return False
+            
+        if not self._setup_serial():
             return False
             
         self.running = True
@@ -56,119 +60,151 @@ class SmartBinSimpleProtocol:
         if self.reader_thread:
             self.reader_thread.join(timeout=2)
             
-        self._cleanup_rfcomm()
+        self._cleanup_serial()
+        self._cleanup_rfcomm_binding()
     
-    def _setup_rfcomm(self) -> bool:
-        """Setup RFCOMM connection using subprocess"""
+    def _setup_rfcomm_binding(self) -> bool:
+        """Setup RFCOMM binding automatically"""
         try:
-            print("📡 Setting up RFCOMM connection...")
+            print(f"🔗 Automatically binding RFCOMM device to ESP32 {self.esp32_mac}...")
             
-            # First, bind rfcomm device (same as working image monitor)
-            print(f"🔗 Binding rfcomm device to ESP32 {self.esp32_mac}...")
+            # First, try to release any existing binding (in case it's already bound)
+            try:
+                release_cmd = ["sudo", "rfcomm", "release", "0"]
+                subprocess.run(release_cmd, capture_output=True, text=True, timeout=5)
+                print("🔓 Released any existing RFCOMM binding")
+            except:
+                pass  # It's okay if there was nothing to release
+            
+            # Now bind the device
             bind_cmd = ["sudo", "rfcomm", "bind", "0", self.esp32_mac, "1"]
-            bind_result = subprocess.run(bind_cmd, capture_output=True, text=True)
+            bind_result = subprocess.run(bind_cmd, capture_output=True, text=True, timeout=10)
             
             if bind_result.returncode != 0:
-                print(f"❌ Failed to bind rfcomm: {bind_result.stderr}")
+                print(f"❌ Failed to bind RFCOMM: {bind_result.stderr}")
+                print(f"💡 Make sure ESP32 {self.esp32_mac} is discoverable and paired")
                 return False
-                
-            print("✅ rfcomm device bound to /dev/rfcomm0")
             
-            # Now read from the device
-            cmd = ["sudo", "cat", self.rfcomm_device]
-            self.read_process = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                bufsize=1,
-                universal_newlines=True
-            )
+            self.rfcomm_bound = True
+            print(f"✅ RFCOMM device bound to {self.rfcomm_device}")
             
-            print(f"✅ RFCOMM connection established to {self.rfcomm_device}")
+            # Wait a moment for the binding to stabilize
+            time.sleep(1)
+            
             return True
             
         except Exception as e:
-            print(f"❌ Failed to setup RFCOMM: {e}")
+            print(f"❌ Failed to setup RFCOMM binding: {e}")
             return False
     
-    def _cleanup_rfcomm(self):
-        """Cleanup RFCOMM connection"""
-        if self.read_process:
+    def _cleanup_rfcomm_binding(self):
+        """Cleanup RFCOMM binding"""
+        if self.rfcomm_bound:
             try:
-                self.read_process.terminate()
-                self.read_process.wait(timeout=2)
-            except:
-                self.read_process.kill()
-            self.read_process = None
-        
-        # Release rfcomm device (same as working image monitor)
+                print("🔓 Releasing RFCOMM device...")
+                release_cmd = ["sudo", "rfcomm", "release", "0"]
+                subprocess.run(release_cmd, capture_output=True, text=True, timeout=5)
+                print("✅ RFCOMM device released")
+                self.rfcomm_bound = False
+            except Exception as e:
+                print(f"⚠️ Warning: Failed to release RFCOMM: {e}")
+    
+    def _setup_serial(self) -> bool:
+        """Setup PySerial connection"""
         try:
-            print("🔓 Releasing rfcomm device...")
-            release_cmd = ["sudo", "rfcomm", "release", "0"]
-            subprocess.run(release_cmd, capture_output=True, text=True)
-            print("✅ rfcomm device released")
+            print(f"📡 Setting up PySerial connection to {self.rfcomm_device}...")
+            
+            self.ser = serial.Serial(
+                port=self.rfcomm_device,
+                baudrate=self.baudrate,
+                timeout=1,  # 1 second timeout for read operations
+                write_timeout=1,  # 1 second timeout for write operations
+                bytesize=serial.EIGHTBITS,
+                parity=serial.PARITY_NONE,
+                stopbits=serial.STOPBITS_ONE
+            )
+            
+            # Clear any existing data in buffers
+            self.ser.flushInput()
+            self.ser.flushOutput()
+            
+            print(f"✅ PySerial connection established")
+            print(f"📊 Port: {self.ser.port}, Baudrate: {self.ser.baudrate}")
+            print(f"🔧 Timeout: {self.ser.timeout}s, Write timeout: {self.ser.write_timeout}s")
+            
+            return True
+            
         except Exception as e:
-            print(f"⚠️ Warning: Failed to release rfcomm: {e}")
+            print(f"❌ Failed to setup PySerial: {e}")
+            return False
+    
+    def _cleanup_serial(self):
+        """Cleanup PySerial connection"""
+        if self.ser and self.ser.is_open:
+            try:
+                print("🔓 Closing PySerial connection...")
+                self.ser.close()
+                print("✅ PySerial connection closed")
+            except Exception as e:
+                print(f"⚠️ Warning: Failed to close PySerial: {e}")
     
     def _start_reader_thread(self):
         """Start the reader thread"""
         self.reader_thread = threading.Thread(target=self._reader_loop, daemon=True)
         self.reader_thread.start()
+        print("📖 Reader thread started")
     
     def _reader_loop(self):
-        """Read messages from ESP32"""
-        print("📖 Reader thread started")
+        """Read messages from ESP32 using PySerial"""
+        print("📖 PySerial reader thread active")
         
-        buffer = ""
-        
-        while self.running and self.read_process:
+        while self.running and self.ser and self.ser.is_open:
             try:
-                # Read character by character to avoid blocking (like image monitor)
-                char = self.read_process.stdout.read(1)
-                if not char:
-                    # Check if process is still alive
-                    if self.read_process.poll() is not None:
-                        print("❌ rfcomm process ended")
-                        break
-                    continue
-                    
-                buffer += char
-                
-                # Process complete lines
-                if char == '\n':
-                    line = buffer.strip()
-                    buffer = ""
+                # Check if data is available
+                if self.ser.in_waiting > 0:
+                    # Read a complete line
+                    line = self.ser.readline().decode('utf-8', errors='ignore').strip()
                     
                     if line:
                         # print(f"📥 Raw line: '{line}'")
-                        # Put message in queue for processing
-                        self.message_queue.put(line)
+                        self._process_line(line)
+                else:
+                    # Small sleep to prevent busy waiting
+                    time.sleep(0.01)
                 
             except Exception as e:
                 if self.running:
                     print(f"❌ Reader error: {e}")
                 break
         
-        print("📖 Reader thread stopped")
+        print("📖 PySerial reader thread stopped")
+    
+    def _process_line(self, line: str):
+        """Process a received line"""
+        # Check if it's a protocol message
+        if self._is_protocol_message(line):
+            code, content = self._extract_code_content(line)
+            self._handle_protocol_message(code, content)
+        else:
+            # Non-protocol message (verbose/debug)
+            print(f"📝 ESP32: {line}")
     
     def _send_message(self, code: str, content: str = "") -> bool:
         """Send a protocol message to ESP32"""
         try:
+            if not self.ser or not self.ser.is_open:
+                print("❌ Serial port not open")
+                return False
+            
             message = f"{code} {content}".strip()
             
-            # Use subprocess to send message with sudo
-            cmd = ["sudo", "bash", "-c", f'echo "{message}" > {self.rfcomm_device}']
-            print(f"Command: {cmd}")
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+            # Send message with newline
+            self.ser.write((message + '\n').encode('utf-8'))
+            self.ser.flush()  # Ensure data is sent immediately
             
-            if result.returncode == 0:
-                print(f"📤 Sent: {message}")
-                return True
-            else:
-                print(f"❌ Send failed: {result.stderr}")
-                return False
-                
+            print(f"📤 Sent: {message}")
+            return True
+            
         except Exception as e:
             print(f"❌ Send error: {e}")
             return False
@@ -320,8 +356,6 @@ class SmartBinSimpleProtocol:
     
     def _mock_classify(self, image: Image.Image) -> Tuple[str, float]:
         """Mock classification function"""
-        import random
-        
         classes = ["plastic", "metal", "paper", "misc"]
         classification = random.choice(classes)
         confidence = random.uniform(0.7, 0.95)
@@ -336,40 +370,41 @@ class SmartBinSimpleProtocol:
     def _main_loop(self):
         """Main communication loop"""
         print("🔄 Starting main communication loop")
+        print("💡 Waiting for ESP32 messages...")
+        print("💡 Send RTC00 from ESP32 to establish connection")
+        print("=" * 60)
         
-        while self.running:
-            # print("Here!")
-            try:
-                # Process incoming messages
-                try:
-                    message = self.message_queue.get(timeout=0.1)
-
-                    # print(f"Message: {message}")
-                    
-                    # Check if it's a protocol message
-                    if self._is_protocol_message(message):
-                        code, content = self._extract_code_content(message)
-                        self._handle_protocol_message(code, content)
-                    else:
-                        # Non-protocol message (verbose/debug)
-                        print(f"📝 ESP32: {message}")
-                        
-                except queue.Empty:
-                    # print("queue empty")
-                    continue
-                    
-            except KeyboardInterrupt:
-                print("\n🛑 Interrupted by user")
-                break
-            except Exception as e:
-                print(f"❌ Main loop error: {e}")
-                time.sleep(1)
+        try:
+            while self.running:
+                # Just sleep and let the reader thread handle everything
+                time.sleep(0.1)
+                
+                # Show connection status periodically
+                if not self.connected:
+                    # Check if we should show waiting message
+                    pass
+                
+        except KeyboardInterrupt:
+            print("\n🛑 Interrupted by user")
+        except Exception as e:
+            print(f"❌ Main loop error: {e}")
         
         print("🔄 Main communication loop ended")
 
 def main():
     """Main function"""
-    protocol = SmartBinSimpleProtocol()
+    print("🎯 SmartBin PySerial Protocol - Automatic Setup")
+    print("📱 ESP32 MAC Address: EC:E3:34:15:F2:62")
+    print("🔧 RFCOMM Device: /dev/rfcomm0")
+    print("⚡ Baudrate: 115200")
+    print("=" * 50)
+    
+    # Automatic setup - no manual RFCOMM binding needed!
+    protocol = SmartBinPySerialProtocol(
+        esp32_mac="EC:E3:34:15:F2:62",  # Copied from simple protocol script
+        rfcomm_device="/dev/rfcomm0",
+        baudrate=115200  # Match ESP32 baudrate
+    )
     
     try:
         protocol.start()

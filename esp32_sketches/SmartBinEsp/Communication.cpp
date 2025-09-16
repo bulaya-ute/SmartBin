@@ -69,8 +69,16 @@ void Communication::handleWaitingLaptopState() {
     
     // Check for incoming protocol messages
     String code, content;
-    if (receiveProtocolMessage(code, content)) {
+    bool receivedProtocolMessage = receiveProtocolMessage(code, content);
+    // Serial.println("--->  Code: " + code + "Content: " + content);
+    if (receivedProtocolMessage) {
         logCommunicationEvent("Received protocol message", "Code: " + code);
+        
+        // FILTER: Ignore our own RTC00 messages while waiting for laptop
+        if (code == CODE_RTC00) {
+            logCommunicationEvent("Ignoring own RTC00 echo", "Filtering out self-sent message");
+            return; // Ignore and continue waiting
+        }
         
         if (code == CODE_RTC01) {
             logCommunicationEvent("Valid RTC01 received from laptop", content);
