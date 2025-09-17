@@ -4,8 +4,8 @@
 #include "Servos.h"
 #include "Ultrasonic.h"
 #include "Logger.h"
-#include "Communication.h"  // For centralized logging
-#include "BluetoothSerial.h"
+#include "Bluetooth.h"         // Includes BluetoothSerial and SerialBT extern declaration
+#include "Communication.h"     // For centralized logging
 
 String device_name = "SmartBin_ESP32";
 
@@ -19,8 +19,7 @@ String device_name = "SmartBin_ESP32";
 #error Serial Port Profile for Bluetooth is not available or not enabled. It is only available for the ESP32 chip.
 #endif
 
-// Create Bluetooth Serial object (used by Logger module)
-BluetoothSerial SerialBT;
+// SerialBT is already defined in Bluetooth.cpp and declared as extern in Bluetooth.h
 
 // Create Communication object for laptop protocol
 Communication comm(&SerialBT);
@@ -77,17 +76,25 @@ void setup() {
   //   LOG_BOOT("⚠️ Warning: Servo initialization failed");
   // }
 
-  // TODO: Uncomment out LED init when ready
-  // LOG_BOOT("Initializing LEDs...");
-  // yield(); // Prevent watchdog timeout
-  //
-  // try {
-  //   initLEDs();
-  //   delay(100); // Give system time to breathe
-  //   LOG_BOOT("✅ LEDs initialized");
-  // } catch (...) {
-  //   LOG_BOOT("⚠️ Warning: LED initialization failed");
-  // }
+  // Initialize LEDs (PCF8575 with P0=Red, P1=Orange, P2=Green)
+  LOG_BOOT("Initializing LEDs...");
+  yield(); // Prevent watchdog timeout
+
+  try {
+    initLEDs();
+    delay(100); // Give system time to breathe
+    LOG_BOOT("✅ LEDs initialized");
+    
+    // Set initial status LED to indicate initialization complete
+    setSystemState(SYSTEM_STATUS);
+    delay(500); // Show red LED briefly
+    
+    // Then switch to ready state
+    setSystemState(SYSTEM_READY);
+    
+  } catch (...) {
+    LOG_BOOT("⚠️ Warning: LED initialization failed");
+  }
 
   // Initialize ultrasonic sensor
   LOG_BOOT("Initializing Ultrasonic...");
@@ -230,6 +237,9 @@ void loop() {
     lastTrigger = currentMillis;
     isProcessing = true;
 
+    // Set system to busy state (orange LED)
+    setSystemState(SYSTEM_BUSY);
+
     logMessage("[Detection] Item detected! Starting sorting cycle...");
 
     // Step 2: Close bin lid
@@ -271,6 +281,9 @@ void loop() {
     openBinLid();
 
     logMessage("[Cycle Complete] Sorted '" + detectedClass + "' into respective bin.");
+
+    // Return system to ready state (green LED)
+    setSystemState(SYSTEM_READY);
 
     isProcessing = false;
   }

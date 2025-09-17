@@ -1,12 +1,13 @@
 #ifndef LEDS_H
 #define LEDS_H
 
-#include "PCF8575.h"
+#include <Wire.h>
+#include <PCF8575.h>
 
-// PCF8575 pin assignments (use library constants)
-#define RED_LED_PIN    P0   // P0 - Status LED (ready after init)
-#define ORANGE_LED_PIN P1   // P1 - Busy LED (sorting sequence)  
-#define GREEN_LED_PIN  P2   // P2 - Ready LED (waiting for item)
+// PCF8575 pin assignments (following test_pcf8575 pattern)
+#define RED_LED_PIN    0   // P0 - Status LED (ready after init)
+#define ORANGE_LED_PIN 1   // P1 - Busy LED (sorting sequence)  
+#define GREEN_LED_PIN  2   // P2 - Ready LED (waiting for item)
 
 // LED states
 enum LEDState {
