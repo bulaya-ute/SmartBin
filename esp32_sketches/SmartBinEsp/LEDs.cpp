@@ -1,27 +1,92 @@
 #include "LEDs.h"
+#include "Logger.h"
 #include <Arduino.h>
 
-// Pin assignments (update as needed)
-int LED1_PIN = 2;
-int LED2_PIN = 4;
-int LED3_PIN = 16;
+// PCF8575 instance (I2C address 0x20)
+PCF8575 pcf8575(0x20);
 
 void initLEDs() {
-  yield(); // Prevent watchdog timeout
-  pinMode(LED1_PIN, OUTPUT);
-  delay(5); // Brief delay
+  logSystemEvent("Initializing LEDs via PCF8575", "Starting LED system");
   
   yield(); // Prevent watchdog timeout
-  pinMode(LED2_PIN, OUTPUT);
-  delay(5); // Brief delay
+  
+  // Initialize PCF8575
+  if (!pcf8575.begin()) {
+    logSystemEvent("PCF8575 Init Failed", "ERROR: Could not initialize I2C expander");
+    return;
+  }
+  
+  delay(10); // Allow PCF8575 to stabilize
+  
+  // Set all LED pins as outputs
+  pcf8575.pinMode(RED_LED_PIN, OUTPUT);
+  pcf8575.pinMode(ORANGE_LED_PIN, OUTPUT);  
+  pcf8575.pinMode(GREEN_LED_PIN, OUTPUT);
   
   yield(); // Prevent watchdog timeout
-  pinMode(LED3_PIN, OUTPUT);
-  delay(5); // Brief delay
+  delay(5);
   
+  // Turn off all LEDs initially
+  clearAllLEDs();
+  
+  // Brief startup sequence to test LEDs
+  logSystemEvent("LED Test Sequence", "Testing all LEDs");
+  
+  // Test sequence: Red -> Orange -> Green -> All off
+  setRedLED(true);
+  delay(200);
+  setRedLED(false);
+  
+  setOrangeLED(true);
+  delay(200);
+  setOrangeLED(false);
+  
+  setGreenLED(true);
+  delay(200);
+  setGreenLED(false);
+  
+  delay(100);
+  
+  logSystemEvent("LEDs Initialized", "LED system ready");
   yield(); // Final yield
 }
 
-void setLED1(bool state) { digitalWrite(LED1_PIN, state); }
-void setLED2(bool state) { digitalWrite(LED2_PIN, state); }
-void setLED3(bool state) { digitalWrite(LED3_PIN, state); }
+void setSystemState(SystemState state) {
+  // Clear all LEDs first
+  clearAllLEDs();
+  
+  switch (state) {
+    case SYSTEM_READY:
+      setGreenLED(true);
+      logSystemEvent("System Ready", "Green LED: Waiting for item");
+      break;
+      
+    case SYSTEM_BUSY:
+      setOrangeLED(true);
+      logSystemEvent("System Busy", "Orange LED: Performing sorting");
+      break;
+      
+    case SYSTEM_STATUS:
+      setRedLED(true);
+      logSystemEvent("System Status", "Red LED: Initialization complete");
+      break;
+  }
+}
+
+void setRedLED(bool state) {
+  pcf8575.digitalWrite(RED_LED_PIN, state ? HIGH : LOW);
+}
+
+void setOrangeLED(bool state) {
+  pcf8575.digitalWrite(ORANGE_LED_PIN, state ? HIGH : LOW);
+}
+
+void setGreenLED(bool state) {
+  pcf8575.digitalWrite(GREEN_LED_PIN, state ? HIGH : LOW);
+}
+
+void clearAllLEDs() {
+  setRedLED(false);
+  setOrangeLED(false);
+  setGreenLED(false);
+}
