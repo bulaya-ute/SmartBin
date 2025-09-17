@@ -2,8 +2,8 @@
 #include <Arduino.h>
 
 // Pin assignments (update to match your wiring)
-int ULTRASONIC_TRIG_PIN = 14;
-int ULTRASONIC_ECHO_PIN = 15;
+int ULTRASONIC_TRIG_PIN = 12;
+int ULTRASONIC_ECHO_PIN = 13;
 
 void initUltrasonic() {
   yield(); // Prevent watchdog timeout
