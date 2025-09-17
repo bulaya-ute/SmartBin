@@ -2,7 +2,7 @@
 #include <Arduino.h>
 
 // Pin assignments (update to match your wiring)
-int ULTRASONIC_TRIG_PIN = 4;
+int ULTRASONIC_TRIG_PIN = 2;
 int ULTRASONIC_ECHO_PIN = 13;
 
 void initUltrasonic() {
