@@ -1,21 +1,25 @@
 /*
-  SmartBin ESP32 Buzzer Test - Simplified Version
+  SmartBin ESP32 Buzzer Test - With Servo Control
   
   Features:
-  - Basic command protocol (buzzer only)
+  - Basic command protocol (buzzer + servo)
   - PCF8575 I2C I/O expander integration
   - Buzzer control on PCF8575 P3
+  - Servo motor control on GPIO16
+  - Classification-based servo positioning
   - Simple Bluetooth communication
   
   Hardware:
   - ESP32-CAM or ESP32 dev board
   - PCF8575 I2C I/O expander
   - Buzzer on PCF8575 P3
+  - Servo motor on GPIO16
 */
 
 #include "BluetoothSerial.h"
 #include <Wire.h>
 #include <ArduinoJson.h>
+#include <ESP32Servo.h>
 
 // PCF8575 I2C address
 #define PCF8575_ADDRESS 0x20
@@ -23,8 +27,12 @@
 // Buzzer pin on PCF8575 (P3)
 #define BUZZER_PIN 3
 
+// Servo pin
+#define SERVO_PIN 16
+
 // Hardware components
 BluetoothSerial SerialBT;
+Servo sortingServo;
 
 // System variables
 uint16_t pcfState = 0xFFFF;  // All pins high initially
@@ -37,10 +45,12 @@ void playTone(int frequency, int duration);
 void performStartupSequence();
 void sendResponse(String id, String status);
 void parseAndExecuteCommand(String command);
+void initServo();
+void moveServoForClassification(String classification);
 
 void setup() {
   Serial.begin(115200);
-  Serial.println("🚀 SmartBin ESP32 Buzzer Test Starting...");
+  Serial.println("🚀 SmartBin ESP32 Buzzer + Servo Test Starting...");
   
   // Initialize I2C
   Wire.begin();
@@ -48,16 +58,22 @@ void setup() {
   // Initialize PCF8575
   initPCF8575();
   
+  // Initialize servo
+  initServo();
+  
   // Initialize Bluetooth
-  SerialBT.begin("SmartBin_Buzzer_Test");
-  Serial.println("📶 Bluetooth initialized: SmartBin_Buzzer_Test");
+  SerialBT.begin("SmartBin_Servo_Test");
+  Serial.println("📶 Bluetooth initialized: SmartBin_Servo_Test");
   
   // Startup sequence
   performStartupSequence();
   
   Serial.println("✅ System initialization complete");
-  Serial.println("💡 Ready for buzzer commands...");
-  Serial.println("💡 Send commands like: control:buzzer:1");
+  Serial.println("💡 Ready for buzzer and servo commands...");
+  Serial.println("💡 Send buzzer commands: control:buzzer:1");
+  Serial.println("💡 Send classification: classify:paper");
+  Serial.println("💡 Send classification: classify:plastic");
+}
 }
 
 void loop() {
@@ -160,11 +176,19 @@ void parseAndExecuteCommand(String command) {
   int firstColon = command.indexOf(':');
   int secondColon = command.indexOf(':', firstColon + 1);
   
-  if (firstColon > 0 && secondColon > firstColon) {
+  if (firstColon > 0) {
     String action = command.substring(0, firstColon);
-    String target = command.substring(firstColon + 1, secondColon);
-    String valueStr = command.substring(secondColon + 1);
-    int value = valueStr.toInt();
+    String target = "";
+    String valueStr = "";
+    int value = 0;
+    
+    if (secondColon > firstColon) {
+      target = command.substring(firstColon + 1, secondColon);
+      valueStr = command.substring(secondColon + 1);
+      value = valueStr.toInt();
+    } else {
+      target = command.substring(firstColon + 1);
+    }
     
     Serial.println("🔧 Parsing command:");
     Serial.println("  Action: " + action);
@@ -208,6 +232,14 @@ void parseAndExecuteCommand(String command) {
         sendResponse("buzzer", "custom_sequence");
         Serial.println("🔔 Buzzer: Custom sequence (" + String(value) + " tones)");
       }
+    } else if (action.equalsIgnoreCase("classify")) {
+      // Handle classification commands for servo sorting
+      String classification = target;
+      if (secondColon > firstColon) {
+        classification = valueStr; // In case classification is after second colon
+      }
+      
+      moveServoForClassification(classification);
     } else {
       sendResponse("error", "unknown_command");
       Serial.println("❌ Unknown command: " + command);
@@ -230,4 +262,60 @@ void sendResponse(String command, String status) {
   
   SerialBT.println(responseStr);
   Serial.println("📤 Response: " + responseStr);
+}
+
+// Initialize servo motor
+void initServo() {
+  // Allocate timer for servo
+  ESP32PWM::allocateTimer(0);
+  
+  // Set servo frequency and attach to pin
+  sortingServo.setPeriodHertz(50);    // Standard 50 Hz servo
+  sortingServo.attach(SERVO_PIN, 1000, 2000); // 1ms-2ms pulse width
+  
+  // Set default position (90 degrees)
+  sortingServo.write(90);
+  delay(500); // Wait for servo to reach position
+  
+  Serial.println("🤖 Servo initialized on GPIO16, default position: 90°");
+}
+
+// Move servo based on classification result
+void moveServoForClassification(String classification) {
+  classification.toLowerCase();
+  
+  Serial.println("🎯 Classification received: " + classification);
+  
+  int targetPosition;
+  String binType;
+  
+  if (classification == "paper" || classification == "misc") {
+    targetPosition = 180;
+    binType = "paper/misc bin";
+  } else {
+    // plastic, metal, or any other classification
+    targetPosition = 0;
+    binType = "plastic/metal bin";
+  }
+  
+  Serial.println("🤖 Moving servo to " + String(targetPosition) + "° (" + binType + ")");
+  
+  // Move to target position
+  sortingServo.write(targetPosition);
+  
+  // Play confirmation sound
+  playTone(1200, 200);
+  
+  // Hold position for 2 seconds
+  delay(2000);
+  
+  // Return to default position (90 degrees)
+  Serial.println("🤖 Returning servo to default position (90°)");
+  sortingServo.write(90);
+  
+  // Play return sound
+  playTone(800, 200);
+  
+  // Send response
+  sendResponse("servo", "sorted_to_" + String(targetPosition) + "_degrees");
 }

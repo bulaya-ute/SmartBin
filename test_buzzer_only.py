@@ -46,8 +46,8 @@ class SimpleBuzzerProtocol:
             self.connection.close()
 
 def test_esp32_buzzer():
-    """Test ESP32 buzzer commands via Bluetooth"""
-    print("🧪 ESP32 Buzzer Test (PCF8575)")
+    """Test ESP32 buzzer and servo commands via Bluetooth"""
+    print("🧪 ESP32 Buzzer + Servo Test")
     print("=" * 50)
     
     # Initialize protocol
@@ -59,7 +59,7 @@ def test_esp32_buzzer():
         if not protocol.connect():
             print("❌ Failed to connect to ESP32")
             print("💡 Make sure:")
-            print("   - ESP32 is running SmartBinBuzzerTest.ino")
+            print("   - ESP32 is running SmartBinBuzzerTest.ino (with servo)")
             print("   - Bluetooth is paired")
             print("   - RFCOMM is set up: sudo rfcomm bind /dev/rfcomm0 <MAC_ADDRESS>")
             return False
