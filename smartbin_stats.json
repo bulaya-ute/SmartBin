@@ -1,0 +1,33 @@
+{
+  "bin_stats": {
+    "0": {
+      "count": 2,
+      "weight": 0.0,
+      "last_updated": "2025-09-18T06:17:41.389154"
+    },
+    "1": {
+      "count": 1,
+      "weight": 0.0,
+      "last_updated": "2025-09-18T06:18:18.265079"
+    },
+    "2": {
+      "count": 0,
+      "weight": 0.0,
+      "last_updated": null
+    },
+    "3": {
+      "count": 1,
+      "weight": 0.0,
+      "last_updated": "2025-09-18T06:18:02.633410"
+    }
+  },
+  "system_stats": {
+    "coins_dispensed": 0,
+    "total_classifications": 4,
+    "successful_connections": 0,
+    "connection_failures": 0,
+    "last_maintenance": null
+  },
+  "total_items_processed": 4,
+  "last_saved": "2025-09-18T15:33:58.854797"
+}

@@ -329,15 +329,9 @@ class SmartBinPySerialProtocol:
                 
                 print(f"🖼️ Image decoded successfully: {image.size}, {image.format}")
                 
-                # Perform mock classification
-                classification, confidence = self._mock_classify(image)
-                
-                # Send classification result
-                result = f"{classification} {confidence:.2f}"
-                if self._send_message("CLS01", result):
-                    print(f"✅ Sent classification: {result}")
-                else:
-                    print("❌ Failed to send classification")
+                # Note: Classification is now handled by GUI protocol integration
+                # The base protocol no longer performs classification directly
+                print("📸 Image processed successfully - classification handled by GUI")
                 
             except Exception as e:
                 print(f"❌ Base64 decode error: {e}")
@@ -353,15 +347,6 @@ class SmartBinPySerialProtocol:
             self.image_metadata = {}
             self.image_parts = {}
             self.expected_parts = 0
-    
-    def _mock_classify(self, image: Image.Image) -> Tuple[str, float]:
-        """Mock classification function"""
-        classes = ["plastic", "metal", "paper", "misc"]
-        classification = random.choice(classes)
-        confidence = random.uniform(0.7, 0.95)
-        
-        print(f"🎯 Mock classification: {classification} (confidence: {confidence:.2f})")
-        return classification, confidence
     
     def _send_error(self, error_code: str, message: str):
         """Send error message to ESP32"""

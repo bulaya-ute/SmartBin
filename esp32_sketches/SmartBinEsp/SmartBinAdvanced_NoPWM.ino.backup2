@@ -1,0 +1,429 @@
+/*
+  SmartBin ESP32 Advanced Control System - Alternative Version (No External Libraries)
+  
+  This version uses ESP32's built-in LEDC PWM for servo control instead of external libraries
+  Use this if you have trouble installing ESP32Servo library
+  
+  Features:
+  - Command protocol implementation (lid, coin, buzzer)
+  - PCF8575 I2C I/O expander integration
+  - Buzzer control on PCF8575 P3
+  - Raw PWM servo control for lid and coin dispenser
+  - Multi-tone startup sequence
+  - Sound feedback for different states
+  
+  Hardware:
+  - ESP32-CAM
+  - PCF8575 I2C I/O expander
+  - Buzzer on PCF8575 P3
+  - Servo motors for lid and coin dispenser
+  - LEDs for status indication
+*/
+
+#include "BluetoothSerial.h"
+#include <Wire.h>
+#include <ArduinoJson.h>
+
+// PCF8575 I2C address
+#define PCF8575_ADDRESS 0x20
+
+// Buzzer pin on PCF8575 (P3)
+#define BUZZER_PIN 3
+
+// Servo pins
+#define LID_SERVO_PIN 12
+#define COIN_SERVO_PIN 13
+
+// PWM properties for servo control
+#define SERVO_FREQ 50        // 50Hz for standard servos
+#define SERVO_RESOLUTION 16  // 16-bit resolution
+#define LID_SERVO_CHANNEL 0
+#define COIN_SERVO_CHANNEL 1
+
+// Servo pulse width constants (in microseconds)
+#define SERVO_MIN_PULSE 1000  // 1ms
+#define SERVO_MAX_PULSE 2000  // 2ms
+#define SERVO_PERIOD 20000    // 20ms (50Hz)
+
+// Convert angle (0-180) to PWM duty cycle
+#define ANGLE_TO_DUTY(angle) (((angle) * (SERVO_MAX_PULSE - SERVO_MIN_PULSE) / 180) + SERVO_MIN_PULSE) * (1 << SERVO_RESOLUTION) / SERVO_PERIOD
+
+// States
+enum SystemState {
+  STATE_INIT,
+  STATE_READY,
+  STATE_PROCESSING,
+  STATE_ERROR
+};
+
+// Global variables
+BluetoothSerial SerialBT;
+SystemState currentState = STATE_INIT;
+uint16_t pcf8575State = 0xFFFF;  // All pins high initially
+
+// Command structure
+struct Command {
+  String action;
+  String target;
+  int value;
+  String id;
+};
+
+// Function prototypes
+void initPCF8575();
+void writePCF8575(uint16_t value);
+uint16_t readPCF8575();
+void setBuzzer(bool state);
+void playTone(int frequency, int duration);
+void performStartupSequence();
+void changeState(SystemState newState);
+void executeCommand(const Command& cmd);
+void handleLidCommand(const Command& cmd);
+void handleCoinCommand(const Command& cmd);
+void handleBuzzerCommand(const Command& cmd);
+void sendResponse(const String& id, bool success, const String& message);
+Command parseCommand(const String& input);
+void servoWrite(int channel, int angle);
+
+void setup() {
+  Serial.begin(115200);
+  Serial.println("🚀 SmartBin ESP32 Advanced Control System Starting...");
+  
+  // Initialize I2C
+  Wire.begin();
+  
+  // Initialize PWM for servos
+  ledcSetup(LID_SERVO_CHANNEL, SERVO_FREQ, SERVO_RESOLUTION);
+  ledcSetup(COIN_SERVO_CHANNEL, SERVO_FREQ, SERVO_RESOLUTION);
+  ledcAttachPin(LID_SERVO_PIN, LID_SERVO_CHANNEL);
+  ledcAttachPin(COIN_SERVO_PIN, COIN_SERVO_CHANNEL);
+  
+  // Set initial servo positions
+  servoWrite(LID_SERVO_CHANNEL, 0);    // Lid closed
+  servoWrite(COIN_SERVO_CHANNEL, 90);  // Coin dispenser ready
+  
+  // Initialize PCF8575
+  initPCF8575();
+  
+  // Initialize Bluetooth
+  SerialBT.begin("SmartBin_Advanced");
+  Serial.println("📶 Bluetooth initialized: SmartBin_Advanced");
+  
+  // Startup sequence
+  performStartupSequence();
+  
+  // Set ready state
+  changeState(STATE_READY);
+  
+  Serial.println("✅ System initialization complete");
+  Serial.println("💡 Waiting for commands...");
+}
+
+void loop() {
+  // Handle Bluetooth communication
+  if (SerialBT.available()) {
+    String input = SerialBT.readStringUntil('\n');
+    input.trim();
+    
+    if (input.length() > 0) {
+      Serial.println("📨 Received: " + input);
+      
+      Command cmd = parseCommand(input);
+      if (cmd.action != "") {
+        executeCommand(cmd);
+      } else {
+        sendResponse("", false, "Invalid command format");
+      }
+    }
+  }
+  
+  // Handle Serial communication (for debugging)
+  if (Serial.available()) {
+    String input = Serial.readStringUntil('\n');
+    input.trim();
+    
+    if (input.length() > 0) {
+      Serial.println("🔧 Debug command: " + input);
+      SerialBT.println(input); // Forward to Bluetooth for testing
+    }
+  }
+  
+  delay(10);
+}
+
+// Servo control using raw PWM
+void servoWrite(int channel, int angle) {
+  // Constrain angle to 0-180 degrees
+  angle = constrain(angle, 0, 180);
+  
+  // Calculate duty cycle
+  uint32_t duty = ANGLE_TO_DUTY(angle);
+  
+  // Set PWM duty cycle
+  ledcWrite(channel, duty);
+}
+
+// PCF8575 initialization
+void initPCF8575() {
+  Wire.beginTransmission(PCF8575_ADDRESS);
+  if (Wire.endTransmission() == 0) {
+    Serial.println("✅ PCF8575 found at address 0x20");
+    writePCF8575(0xFFFF); // All pins high
+  } else {
+    Serial.println("❌ PCF8575 not found!");
+  }
+}
+
+// Write to PCF8575
+void writePCF8575(uint16_t value) {
+  Wire.beginTransmission(PCF8575_ADDRESS);
+  Wire.write(value & 0xFF);         // Low byte
+  Wire.write((value >> 8) & 0xFF);  // High byte
+  Wire.endTransmission();
+  pcf8575State = value;
+}
+
+// Read from PCF8575
+uint16_t readPCF8575() {
+  Wire.requestFrom(PCF8575_ADDRESS, 2);
+  if (Wire.available() >= 2) {
+    uint16_t value = Wire.read();           // Low byte
+    value |= (Wire.read() << 8);           // High byte
+    return value;
+  }
+  return 0xFFFF;
+}
+
+// Control buzzer on PCF8575
+void setBuzzer(bool state) {
+  if (state) {
+    pcf8575State &= ~(1 << BUZZER_PIN);  // Clear bit (active low)
+  } else {
+    pcf8575State |= (1 << BUZZER_PIN);   // Set bit (inactive high)
+  }
+  writePCF8575(pcf8575State);
+}
+
+// Play tone with specific frequency and duration
+void playTone(int frequency, int duration) {
+  if (frequency <= 0) {
+    setBuzzer(false);
+    delay(duration);
+    return;
+  }
+  
+  int period = 1000000 / frequency;  // Period in microseconds
+  int halfPeriod = period / 2;
+  int cycles = (duration * 1000) / period;
+  
+  for (int i = 0; i < cycles; i++) {
+    setBuzzer(true);
+    delayMicroseconds(halfPeriod);
+    setBuzzer(false);
+    delayMicroseconds(halfPeriod);
+  }
+}
+
+// Startup sequence with multiple tones
+void performStartupSequence() {
+  Serial.println("🎵 Playing startup sequence...");
+  
+  // Musical startup sequence
+  playTone(523, 200);  // C5
+  delay(50);
+  playTone(659, 200);  // E5
+  delay(50);
+  playTone(784, 300);  // G5
+  delay(100);
+  playTone(1047, 400); // C6
+  delay(200);
+  
+  setBuzzer(false);    // Ensure buzzer is off
+  Serial.println("✅ Startup sequence complete");
+}
+
+// Change system state with audio feedback
+void changeState(SystemState newState) {
+  if (newState != currentState) {
+    currentState = newState;
+    
+    switch (newState) {
+      case STATE_READY:
+        Serial.println("🟢 State: READY");
+        playTone(1000, 100);
+        break;
+      case STATE_PROCESSING:
+        Serial.println("🟡 State: PROCESSING");
+        playTone(800, 150);
+        break;
+      case STATE_ERROR:
+        Serial.println("🔴 State: ERROR");
+        playTone(400, 300);
+        break;
+      default:
+        Serial.println("⚪ State: INIT");
+        break;
+    }
+  }
+}
+
+// Parse incoming command
+Command parseCommand(const String& input) {
+  Command cmd;
+  
+  // Try to parse as JSON first
+  DynamicJsonDocument doc(256);
+  DeserializationError error = deserializeJson(doc, input);
+  
+  if (!error) {
+    // JSON format
+    cmd.action = doc["action"].as<String>();
+    cmd.target = doc["target"].as<String>();
+    cmd.value = doc["value"] | 0;
+    cmd.id = doc["id"].as<String>();
+  } else {
+    // Simple format: ACTION:TARGET:VALUE:ID
+    int firstColon = input.indexOf(':');
+    int secondColon = input.indexOf(':', firstColon + 1);
+    int thirdColon = input.indexOf(':', secondColon + 1);
+    
+    if (firstColon > 0) {
+      cmd.action = input.substring(0, firstColon);
+      
+      if (secondColon > firstColon) {
+        cmd.target = input.substring(firstColon + 1, secondColon);
+        
+        if (thirdColon > secondColon) {
+          cmd.value = input.substring(secondColon + 1, thirdColon).toInt();
+          cmd.id = input.substring(thirdColon + 1);
+        } else {
+          String remaining = input.substring(secondColon + 1);
+          if (remaining.length() > 0 && isDigit(remaining.charAt(0))) {
+            cmd.value = remaining.toInt();
+          } else {
+            cmd.id = remaining;
+          }
+        }
+      } else {
+        cmd.target = input.substring(firstColon + 1);
+      }
+    }
+  }
+  
+  return cmd;
+}
+
+// Execute parsed command
+void executeCommand(const Command& cmd) {
+  changeState(STATE_PROCESSING);
+  
+  Serial.println("🔧 Executing command:");
+  Serial.println("  Action: " + cmd.action);
+  Serial.println("  Target: " + cmd.target);
+  Serial.println("  Value: " + String(cmd.value));
+  Serial.println("  ID: " + cmd.id);
+  
+  if (cmd.action.equalsIgnoreCase("control")) {
+    if (cmd.target.equalsIgnoreCase("lid")) {
+      handleLidCommand(cmd);
+    } else if (cmd.target.equalsIgnoreCase("coin")) {
+      handleCoinCommand(cmd);
+    } else if (cmd.target.equalsIgnoreCase("buzzer")) {
+      handleBuzzerCommand(cmd);
+    } else {
+      sendResponse(cmd.id, false, "Unknown target: " + cmd.target);
+    }
+  } else {
+    sendResponse(cmd.id, false, "Unknown action: " + cmd.action);
+  }
+  
+  changeState(STATE_READY);
+}
+
+// Handle lid control commands
+void handleLidCommand(const Command& cmd) {
+  if (cmd.value == 1) {
+    // Open lid
+    Serial.println("🔓 Opening lid...");
+    servoWrite(LID_SERVO_CHANNEL, 90);  // Open position
+    playTone(1200, 200);
+    delay(500);  // Wait for servo to move
+    sendResponse(cmd.id, true, "Lid opened");
+  } else {
+    // Close lid
+    Serial.println("🔒 Closing lid...");
+    servoWrite(LID_SERVO_CHANNEL, 0);   // Closed position
+    playTone(800, 200);
+    sendResponse(cmd.id, true, "Lid closed");
+  }
+}
+
+// Handle coin dispenser commands
+void handleCoinCommand(const Command& cmd) {
+  if (cmd.value > 0) {
+    // Dispense coins
+    Serial.println("🪙 Dispensing " + String(cmd.value) + " coin(s)...");
+    for (int i = 0; i < cmd.value; i++) {
+      servoWrite(COIN_SERVO_CHANNEL, 45);   // Dispense position
+      delay(300);
+      servoWrite(COIN_SERVO_CHANNEL, 90);   // Return position
+      delay(300);
+      playTone(1500, 100);  // Coin sound
+      delay(200);
+    }
+    sendResponse(cmd.id, true, "Dispensed " + String(cmd.value) + " coin(s)");
+  } else {
+    sendResponse(cmd.id, false, "Invalid coin count");
+  }
+}
+
+// Handle buzzer commands
+void handleBuzzerCommand(const Command& cmd) {
+  Serial.println("🔔 Buzzer command - Value: " + String(cmd.value));
+  
+  if (cmd.value == 1) {
+    // Single beep
+    playTone(1000, 200);
+    sendResponse(cmd.id, true, "Single beep");
+  } else if (cmd.value == 2) {
+    // Double beep
+    playTone(1000, 150);
+    delay(100);
+    playTone(1000, 150);
+    sendResponse(cmd.id, true, "Double beep");
+  } else if (cmd.value == 3) {
+    // Triple beep
+    playTone(1000, 100);
+    delay(80);
+    playTone(1000, 100);
+    delay(80);
+    playTone(1000, 100);
+    sendResponse(cmd.id, true, "Triple beep");
+  } else if (cmd.value == 0) {
+    // Silence
+    setBuzzer(false);
+    sendResponse(cmd.id, true, "Buzzer off");
+  } else {
+    // Custom sequence
+    for (int i = 0; i < cmd.value && i < 10; i++) {
+      playTone(800 + (i * 100), 150);
+      delay(100);
+    }
+    sendResponse(cmd.id, true, "Custom sequence");
+  }
+}
+
+// Send response back to GUI
+void sendResponse(const String& id, bool success, const String& message) {
+  DynamicJsonDocument response(256);
+  response["id"] = id;
+  response["success"] = success;
+  response["message"] = message;
+  response["timestamp"] = millis();
+  
+  String responseStr;
+  serializeJson(response, responseStr);
+  
+  SerialBT.println(responseStr);
+  Serial.println("📤 Response: " + responseStr);
+}

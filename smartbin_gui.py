@@ -6,14 +6,15 @@ A modern CustomTkinter interface for the SmartBin PySerial Bluetooth protocol
 
 import customtkinter as ctk
 import tkinter as tk
-from tkinter import scrolledtext
+from tkinter import scrolledtext, simpledialog
 import threading
 import queue
 import time
 import base64
 import io
 import json
-from datetime import datetime
+import os
+from datetime import datetime, timedelta
 from PIL import Image, ImageTk
 from typing import Optional, Dict, Any, Tuple
 import serial
@@ -38,39 +39,116 @@ class SmartBinGUI:
         self.protocol = None
         self.protocol_thread = None
         self.running = False
+        self.connected = False
+        self.reconnect_attempts = 0
+        self.sudo_password = None  # Stored sudo password for session
         
         # GUI state
         self.current_image = None
         self.classification_data = {}
         self.message_queue = queue.Queue()
         
+        # Persistent stats
+        self.session_start_time = datetime.now()
+        self.total_items_processed = 0
+        self.connection_uptime = timedelta()
+        self.last_connection_time = None
+        
+        # Bin stats (persistent across sessions)
+        self.bin_stats = {
+            0: {"count": 0, "weight": 0.0, "last_updated": None},  # Plastic
+            1: {"count": 0, "weight": 0.0, "last_updated": None},  # Metal  
+            2: {"count": 0, "weight": 0.0, "last_updated": None},  # Paper
+            3: {"count": 0, "weight": 0.0, "last_updated": None}   # Misc
+        }
+        
+        # System stats
+        self.system_stats = {
+            "coins_dispensed": 0,
+            "total_classifications": 0,
+            "successful_connections": 0,
+            "connection_failures": 0,
+            "last_maintenance": None
+        }
+        
+        # Load persistent stats
+        self._load_persistent_stats()
+        
         # Initialize GUI
         self._setup_gui()
+        
+        # Request sudo password at startup (mandatory)
+        if not self._request_startup_sudo_password():
+            print("❌ Sudo password required for SmartBin operation")
+            self.root.destroy()
+            return
+        
         self._setup_protocol_integration()
         
         # Start GUI update loop
         self._start_gui_updates()
+        
+        # Start stats update loop
+        self._start_stats_updates()
     
     def _setup_gui(self):
         """Setup the main GUI layout"""
         # Configure grid weights
-        self.root.grid_columnconfigure(0, weight=2)  # Left side (image + controls)
-        self.root.grid_columnconfigure(1, weight=1)  # Right side (classification)
-        self.root.grid_rowconfigure(1, weight=1)     # Message log area
+        self.root.grid_columnconfigure(0, weight=1)
+        self.root.grid_rowconfigure(0, weight=2)  # Top section (image + classification)
+        self.root.grid_rowconfigure(1, weight=3)  # Middle section (message log) - resizable
+        self.root.grid_rowconfigure(2, weight=0)  # Bottom section (controls)
         
         # Top section: Image and Classification
         self._create_top_section()
         
-        # Middle section: Message log
+        # Create a resizable splitter for message section
+        self.main_paned = tk.PanedWindow(
+            self.root, 
+            orient=tk.VERTICAL, 
+            sashwidth=8,
+            sashrelief=tk.RAISED,
+            bg="#2b2b2b"
+        )
+        self.main_paned.grid(row=1, column=0, sticky="nsew", padx=10)
+        
+        # Dummy frame for the splitter (we'll add the message section to this)
+        self.splitter_top = ctk.CTkFrame(self.main_paned)
+        self.splitter_bottom = ctk.CTkFrame(self.main_paned)
+        
+        # Add frames to the paned window
+        self.main_paned.add(self.splitter_top, height=100)  # Minimum height
+        self.main_paned.add(self.splitter_bottom, height=300)  # Message log area
+        
+        # Middle section: Message log (in the bottom part of splitter)
         self._create_message_section()
         
         # Bottom section: Controls
         self._create_control_section()
     
     def _create_top_section(self):
-        """Create the top section with image and classification"""
-        # Left frame: Image preview
-        self.image_frame = ctk.CTkFrame(self.root)
+        """Create the top section with image, classification, and bin status"""
+        # Main top frame
+        self.top_frame = ctk.CTkFrame(self.root)
+        self.top_frame.grid(row=0, column=0, padx=10, pady=(10, 5), sticky="nsew")
+        
+        # Configure top frame grid
+        self.top_frame.grid_columnconfigure(0, weight=2)  # Image area
+        self.top_frame.grid_columnconfigure(1, weight=1)  # Classification area
+        self.top_frame.grid_columnconfigure(2, weight=1)  # Bin status area
+        
+        # Left: Image preview
+        self._create_image_section()
+        
+        # Middle: Classification results
+        self._create_classification_section()
+        
+        # Right: Bin status visualization
+        self._create_bin_status_section()
+    
+    def _create_image_section(self):
+        """Create the image preview section"""
+        self.image_frame = ctk.CTkFrame(self.top_frame)
         self.image_frame.grid(row=0, column=0, padx=(10, 5), pady=10, sticky="nsew")
         
         # Image title
@@ -98,10 +176,11 @@ class SmartBinGUI:
             font=ctk.CTkFont(size=12)
         )
         self.image_info.pack(pady=(0, 10))
-        
-        # Right frame: Classification results
-        self.classification_frame = ctk.CTkFrame(self.root)
-        self.classification_frame.grid(row=0, column=1, padx=(5, 10), pady=10, sticky="nsew")
+    
+    def _create_classification_section(self):
+        """Create the classification results section"""
+        self.classification_frame = ctk.CTkFrame(self.top_frame)
+        self.classification_frame.grid(row=0, column=1, padx=5, pady=10, sticky="nsew")
         
         # Classification title
         self.classification_title = ctk.CTkLabel(
@@ -124,11 +203,119 @@ class SmartBinGUI:
         )
         self.no_classification_label.pack(expand=True)
     
+    def _create_bin_status_section(self):
+        """Create the bin status visualization section"""
+        self.bin_status_frame = ctk.CTkFrame(self.top_frame)
+        self.bin_status_frame.grid(row=0, column=2, padx=(5, 10), pady=10, sticky="nsew")
+        
+        # Bin status title
+        self.bin_status_title = ctk.CTkLabel(
+            self.bin_status_frame,
+            text="🗂️ Bin Status",
+            font=ctk.CTkFont(size=16, weight="bold")
+        )
+        self.bin_status_title.pack(pady=(10, 5))
+        
+        # Bin status grid
+        self.bin_grid = ctk.CTkFrame(self.bin_status_frame)
+        self.bin_grid.pack(fill="both", expand=True, padx=10, pady=(0, 10))
+        
+        # Initialize bin counts (placeholder data)
+        self.bin_counts = {
+            "plastic": 3,
+            "metal": 1, 
+            "paper": 5,
+            "misc": 2
+        }
+        self.bin_capacity = 10
+        self.coin_count = 7
+        self.coin_capacity = 10
+        
+        self._create_bin_visualizations()
+    
+    def _create_bin_visualizations(self):
+        """Create the bin and coin visualizations"""
+        # Bin emojis and colors
+        bin_info = {
+            "plastic": {"emoji": "🥤", "color": "#2196F3"},
+            "metal": {"emoji": "🥫", "color": "#FF9800"},
+            "paper": {"emoji": "📄", "color": "#4CAF50"},
+            "misc": {"emoji": "🗑️", "color": "#9E9E9E"}
+        }
+        
+        # Create bin displays (2x2 grid)
+        for i, (bin_type, info) in enumerate(bin_info.items()):
+            row = i // 2
+            col = i % 2
+            
+            bin_frame = ctk.CTkFrame(self.bin_grid)
+            bin_frame.grid(row=row, column=col, padx=5, pady=5, sticky="nsew")
+            
+            # Configure grid weights
+            self.bin_grid.grid_rowconfigure(row, weight=1)
+            self.bin_grid.grid_columnconfigure(col, weight=1)
+            
+            # Bin emoji and label
+            bin_label = ctk.CTkLabel(
+                bin_frame,
+                text=f"{info['emoji']}\n{bin_type.title()}",
+                font=ctk.CTkFont(size=14, weight="bold")
+            )
+            bin_label.pack(pady=(5, 2))
+            
+            # Progress bar for bin fullness
+            progress = ctk.CTkProgressBar(
+                bin_frame,
+                width=80,
+                height=12,
+                progress_color=info['color']
+            )
+            progress.pack(pady=2)
+            progress.set(self.bin_counts[bin_type] / self.bin_capacity)
+            
+            # Count label
+            count_label = ctk.CTkLabel(
+                bin_frame,
+                text=f"{self.bin_counts[bin_type]}/{self.bin_capacity}",
+                font=ctk.CTkFont(size=12)
+            )
+            count_label.pack(pady=(2, 5))
+            
+            # Store references for updates
+            setattr(self, f"{bin_type}_progress", progress)
+            setattr(self, f"{bin_type}_count_label", count_label)
+        
+        # Coin dispenser display
+        coin_frame = ctk.CTkFrame(self.bin_grid)
+        coin_frame.grid(row=2, column=0, columnspan=2, padx=5, pady=5, sticky="ew")
+        
+        coin_label = ctk.CTkLabel(
+            coin_frame,
+            text="🪙 Coin Dispenser",
+            font=ctk.CTkFont(size=14, weight="bold")
+        )
+        coin_label.pack(pady=(5, 2))
+        
+        self.coin_progress = ctk.CTkProgressBar(
+            coin_frame,
+            width=160,
+            height=12,
+            progress_color="#FFD700"
+        )
+        self.coin_progress.pack(pady=2)
+        self.coin_progress.set(self.coin_count / self.coin_capacity)
+        
+        self.coin_count_label = ctk.CTkLabel(
+            coin_frame,
+            text=f"{self.coin_count}/{self.coin_capacity} coins",
+            font=ctk.CTkFont(size=12)
+        )
+        self.coin_count_label.pack(pady=(2, 5))
+    
     def _create_message_section(self):
         """Create the message log section"""
-        # Message frame
-        self.message_frame = ctk.CTkFrame(self.root)
-        self.message_frame.grid(row=1, column=0, columnspan=2, padx=10, pady=(0, 10), sticky="nsew")
+        # Message frame (in the bottom part of the splitter)
+        self.message_frame = self.splitter_bottom
         
         # Message title and controls
         self.message_header = ctk.CTkFrame(self.message_frame)
@@ -183,7 +370,7 @@ class SmartBinGUI:
         """Create the bottom control section"""
         # Control frame
         self.control_frame = ctk.CTkFrame(self.root)
-        self.control_frame.grid(row=2, column=0, columnspan=2, padx=10, pady=(0, 10), sticky="ew")
+        self.control_frame.grid(row=2, column=0, padx=10, pady=(5, 10), sticky="ew")
         
         # Connection controls
         self.connection_frame = ctk.CTkFrame(self.control_frame)
@@ -247,21 +434,95 @@ class SmartBinGUI:
         )
         self.send_btn.pack(side="left", padx=(0, 10))
         
-        # Quick commands
-        quick_commands = [
-            ("🤝 Connect", "RTC00"),
+        # Quick commands - organized by category
+        
+        # Hardware control commands frame
+        hardware_frame = ctk.CTkFrame(self.command_frame)
+        hardware_frame.pack(fill="x", pady=(10, 5))
+        
+        hardware_label = ctk.CTkLabel(hardware_frame, text="🔧 Hardware Control", font=ctk.CTkFont(weight="bold"))
+        hardware_label.pack(pady=(5, 5))
+        
+        # Row 1: Basic commands
+        basic_frame = ctk.CTkFrame(hardware_frame)
+        basic_frame.pack(fill="x", padx=5, pady=2)
+        
+        basic_commands = [
+            ("🤝 Send Hello", "RTC00"),
             ("📷 Request Image", "IMG01"),
             ("🔄 Status", "STA01")
         ]
         
-        for text, cmd in quick_commands:
+        for text, cmd in basic_commands:
             btn = ctk.CTkButton(
-                self.command_frame,
+                basic_frame,
                 text=text,
                 command=lambda c=cmd: self._send_quick_command(c),
                 width=100
             )
-            btn.pack(side="left", padx=(5, 0))
+            btn.pack(side="left", padx=2, pady=2)
+        
+        # Row 2: Lid control
+        lid_frame = ctk.CTkFrame(hardware_frame)
+        lid_frame.pack(fill="x", padx=5, pady=2)
+        
+        lid_commands = [
+            ("🔓 Open Lid", "LID00 open"),
+            ("🔒 Close Lid", "LID00 close"),
+            ("❓ Lid Status", "LID00 status"),
+            ("🤖 Auto Lid", "LID00 auto"),
+            ("✋ Manual Lid", "LID00 manual")
+        ]
+        
+        for text, cmd in lid_commands:
+            btn = ctk.CTkButton(
+                lid_frame,
+                text=text,
+                command=lambda c=cmd: self._send_quick_command(c),
+                width=100
+            )
+            btn.pack(side="left", padx=2, pady=2)
+        
+        # Row 3: Coin dispenser
+        coin_frame = ctk.CTkFrame(hardware_frame)
+        coin_frame.pack(fill="x", padx=5, pady=2)
+        
+        coin_commands = [
+            ("🪙 Dispense Coin", "COIN0 dispense"),
+            ("🪙💰 Dispense 3", "COIN0 dispense --count 3"),
+            ("📊 Coin Status", "COIN0 status"),
+            ("🔧 Test Dispenser", "COIN0 test")
+        ]
+        
+        for text, cmd in coin_commands:
+            btn = ctk.CTkButton(
+                coin_frame,
+                text=text,
+                command=lambda c=cmd: self._send_quick_command(c),
+                width=100
+            )
+            btn.pack(side="left", padx=2, pady=2)
+        
+        # Row 4: Buzzer control
+        buzzer_frame = ctk.CTkFrame(hardware_frame)
+        buzzer_frame.pack(fill="x", padx=5, pady=2)
+        
+        buzzer_commands = [
+            ("🔊 Startup Sound", "BUZZ0 startup"),
+            ("📦 Item Detected", "BUZZ0 detected"),
+            ("✅ Sort Complete", "BUZZ0 complete"),
+            ("🚨 Error Sound", "BUZZ0 error"),
+            ("🔇 Buzzer Off", "BUZZ0 off")
+        ]
+        
+        for text, cmd in buzzer_commands:
+            btn = ctk.CTkButton(
+                buzzer_frame,
+                text=text,
+                command=lambda c=cmd: self._send_quick_command(c),
+                width=100
+            )
+            btn.pack(side="left", padx=2, pady=2)
     
     def _setup_protocol_integration(self):
         """Setup integration with the PySerial protocol"""
@@ -270,6 +531,70 @@ class SmartBinGUI:
             def __init__(self, gui_instance, *args, **kwargs):
                 super().__init__(*args, **kwargs)
                 self.gui = gui_instance
+            
+            def _setup_rfcomm_binding(self) -> bool:
+                """Setup RFCOMM binding with GUI password prompt"""
+                try:
+                    self.gui.message_queue.put({
+                        'type': 'info',
+                        'message': f"Setting up Bluetooth connection to {self.esp32_mac}...",
+                        'timestamp': datetime.now().strftime("%H:%M:%S")
+                    })
+                    
+                    # First, try to release any existing binding
+                    try:
+                        release_cmd = ["sudo", "rfcomm", "release", "0"]
+                        subprocess.run(release_cmd, capture_output=True, text=True, timeout=5)
+                    except:
+                        pass
+                    
+                    # Get password from GUI
+                    password = self.gui._get_sudo_password()
+                    if not password:
+                        self.gui.message_queue.put({
+                            'type': 'error',
+                            'message': "Password required for Bluetooth setup",
+                            'timestamp': datetime.now().strftime("%H:%M:%S")
+                        })
+                        return False
+                    
+                    # Bind the device with password
+                    bind_cmd = ["sudo", "-S", "rfcomm", "bind", "0", self.esp32_mac, "1"]
+                    bind_process = subprocess.Popen(
+                        bind_cmd,
+                        stdin=subprocess.PIPE,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        text=True
+                    )
+                    
+                    stdout, stderr = bind_process.communicate(input=password + "\n", timeout=10)
+                    
+                    if bind_process.returncode != 0:
+                        self.gui.message_queue.put({
+                            'type': 'error',
+                            'message': f"Failed to bind RFCOMM: {stderr}",
+                            'timestamp': datetime.now().strftime("%H:%M:%S")
+                        })
+                        return False
+                    
+                    self.rfcomm_bound = True
+                    self.gui.message_queue.put({
+                        'type': 'info',
+                        'message': f"✅ RFCOMM device bound to {self.rfcomm_device}",
+                        'timestamp': datetime.now().strftime("%H:%M:%S")
+                    })
+                    
+                    time.sleep(1)
+                    return True
+                    
+                except Exception as e:
+                    self.gui.message_queue.put({
+                        'type': 'error',
+                        'message': f"Failed to setup RFCOMM binding: {e}",
+                        'timestamp': datetime.now().strftime("%H:%M:%S")
+                    })
+                    return False
             
             def _process_line(self, line: str):
                 """Override to send messages to GUI"""
@@ -338,26 +663,47 @@ class SmartBinGUI:
                         'timestamp': datetime.now().strftime("%H:%M:%S")
                     })
                     
-                    # Perform classification
-                    classification, confidence = self._mock_classify(image)
+                    # Perform classification using YOLO backend
+                    classification_result = self._classify_with_yolo_backend(image)
                     
-                    # Send classification to GUI
-                    self.gui.message_queue.put({
-                        'type': 'classification',
-                        'result': classification,
-                        'confidence': confidence,
-                        'all_classes': self._get_all_class_confidences(),
-                        'timestamp': datetime.now().strftime("%H:%M:%S")
-                    })
-                    
-                    # Send classification result to ESP32
-                    result = f"{classification} {confidence:.2f}"
-                    if self._send_message("CLS01", result):
+                    if classification_result["success"]:
+                        classification = classification_result["result"]
+                        confidence = classification_result["confidence"]
+                        all_classes = classification_result["all_confidences"]
+                        
+                        # Send classification to GUI
                         self.gui.message_queue.put({
-                            'type': 'info',
-                            'message': f"✅ Sent classification: {result}",
+                            'type': 'classification',
+                            'result': classification,
+                            'confidence': confidence,
+                            'all_classes': all_classes,
                             'timestamp': datetime.now().strftime("%H:%M:%S")
                         })
+                        
+                        # Send classification result to ESP32
+                        result = f"{classification} {confidence:.2f}"
+                        if self._send_message("CLS01", result):
+                            self.gui.message_queue.put({
+                                'type': 'info',
+                                'message': f"✅ Sent classification: {result}",
+                                'timestamp': datetime.now().strftime("%H:%M:%S")
+                            })
+                    else:
+                        # Classification failed - no fallback
+                        error_msg = classification_result.get('error', 'Unknown classification error')
+                        self.gui.message_queue.put({
+                            'type': 'error',
+                            'message': f"❌ YOLO classification FAILED: {error_msg}",
+                            'timestamp': datetime.now().strftime("%H:%M:%S")
+                        })
+                        
+                        # Send error to ESP32
+                        if self._send_message("CLS01", "ERROR 0.00"):
+                            self.gui.message_queue.put({
+                                'type': 'info', 
+                                'message': f"🚨 Sent ERROR status to ESP32",
+                                'timestamp': datetime.now().strftime("%H:%M:%S")
+                            })
                 
                 except Exception as e:
                     self.gui.message_queue.put({
@@ -373,28 +719,179 @@ class SmartBinGUI:
                     self.image_parts = {}
                     self.expected_parts = 0
             
-            def _get_all_class_confidences(self) -> Dict[str, float]:
-                """Generate mock confidence scores for all classes"""
-                import random
-                classes = ["plastic", "metal", "paper", "misc"]
-                confidences = {}
+            def _classify_with_yolo_backend(self, image: Image.Image) -> Dict[str, Any]:
+                """Classify image using the YOLO backend script"""
+                try:
+                    import subprocess
+                    import tempfile
+                    import os
+                    
+                    # Save image to temporary file
+                    with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as tmp_file:
+                        image.save(tmp_file.name, 'JPEG')
+                        tmp_path = tmp_file.name
+                    
+                    try:
+                        # Call the YOLO backend script with virtual environment python
+                        venv_python = ".venv/bin/python"
+                        cmd = [
+                            venv_python, "yolo_classification_backend.py",
+                            "--model", "runs/smartbin_classify2/weights/best.pt",
+                            "--image", tmp_path,
+                            "--json"
+                        ]
+                        
+                        self.gui.message_queue.put({
+                            'type': 'info',
+                            'message': f"🔄 Running YOLO classification: {' '.join(cmd)}",
+                            'timestamp': datetime.now().strftime("%H:%M:%S")
+                        })
+                        
+                        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+                        
+                        if result.returncode == 0:
+                            # Parse JSON result
+                            import json
+                            if result.stdout.strip():  # Check if output is not empty
+                                self.gui.message_queue.put({
+                                    'type': 'info',
+                                    'message': f"✅ YOLO backend output received: {len(result.stdout)} characters",
+                                    'timestamp': datetime.now().strftime("%H:%M:%S")
+                                })
+                                classification_data = json.loads(result.stdout)
+                                return classification_data
+                            else:
+                                return {
+                                    "success": False,
+                                    "error": "Backend script returned empty output"
+                                }
+                        else:
+                            error_msg = f"Backend script error (exit code {result.returncode}): {result.stderr}"
+                            self.gui.message_queue.put({
+                                'type': 'error',
+                                'message': f"❌ YOLO backend failed: {error_msg}",
+                                'timestamp': datetime.now().strftime("%H:%M:%S")
+                            })
+                            return {
+                                "success": False,
+                                "error": error_msg
+                            }
+                    
+                    finally:
+                        # Clean up temporary file
+                        try:
+                            os.unlink(tmp_path)
+                        except:
+                            pass
                 
-                # Generate random confidences that sum to ~1.0
-                remaining = 1.0
-                for i, cls in enumerate(classes[:-1]):
-                    if i == 0:  # First class gets highest confidence
-                        conf = random.uniform(0.6, 0.9)
-                    else:
-                        conf = random.uniform(0.01, remaining * 0.5)
-                    confidences[cls] = conf
-                    remaining -= conf
-                
-                # Last class gets remaining confidence
-                confidences[classes[-1]] = max(0.01, remaining)
-                
-                return confidences
+                except Exception as e:
+                    return {
+                        "success": False,
+                        "error": f"YOLO backend integration error: {e}"
+                    }
         
         self.protocol_class = GUIProtocol
+    
+    def _get_sudo_password(self) -> Optional[str]:
+        """Get sudo password - uses stored password from startup"""
+        try:
+            # Return the password that was verified at startup
+            if hasattr(self, 'sudo_password') and self.sudo_password:
+                return self.sudo_password
+            else:
+                # Fallback to dialog if somehow not set
+                from tkinter import messagebox
+                messagebox.showerror(
+                    "Password Not Available",
+                    "Administrator password was not set during startup.\n"
+                    "Please restart the application."
+                )
+                return None
+        except Exception:
+            return None
+    
+    def _request_startup_sudo_password(self) -> bool:
+        """Request sudo password at startup - mandatory for operation"""
+        try:
+            # Show info dialog first
+            from tkinter import messagebox
+            messagebox.showinfo(
+                "SmartBin Initialization",
+                "SmartBin requires administrator privileges to configure Bluetooth connections.\n\n"
+                "You will be prompted for your password to set up RFCOMM bindings.\n"
+                "This is required for ESP32 communication."
+            )
+            
+            # Request password
+            password = simpledialog.askstring(
+                "Administrator Password Required",
+                "Enter your password to initialize SmartBin:\n"
+                "(This will be used for Bluetooth setup throughout the session)",
+                show='*'
+            )
+            
+            if not password:
+                messagebox.showerror(
+                    "Password Required",
+                    "Administrator password is required for SmartBin to function.\n"
+                    "The application will now exit."
+                )
+                return False
+            
+            # Test the password by running a simple sudo command
+            import subprocess
+            test_cmd = f"echo '{password}' | sudo -S echo 'Password verified'"
+            try:
+                result = subprocess.run(
+                    test_cmd, 
+                    shell=True, 
+                    capture_output=True, 
+                    text=True, 
+                    timeout=10
+                )
+                
+                if result.returncode != 0:
+                    messagebox.showerror(
+                        "Invalid Password",
+                        "The password you entered is incorrect.\n"
+                        "Please restart the application and try again."
+                    )
+                    return False
+                
+                # Store password for session (encrypted in memory)
+                self.sudo_password = password
+                
+                messagebox.showinfo(
+                    "Password Verified",
+                    "Administrator password verified successfully!\n"
+                    "SmartBin is ready to initialize Bluetooth connections."
+                )
+                
+                return True
+                
+            except subprocess.TimeoutExpired:
+                messagebox.showerror(
+                    "Password Verification Timeout",
+                    "Password verification timed out.\n"
+                    "Please restart the application and try again."
+                )
+                return False
+            except Exception as e:
+                messagebox.showerror(
+                    "Password Verification Error",
+                    f"Failed to verify password: {e}\n"
+                    "Please restart the application and try again."
+                )
+                return False
+                
+        except Exception as e:
+            from tkinter import messagebox
+            messagebox.showerror(
+                "Startup Error",
+                f"Failed to request password: {e}\n"
+                "The application will now exit."
+            )
+            return False
     
     def _start_gui_updates(self):
         """Start the GUI update loop"""
@@ -443,6 +940,67 @@ class SmartBinGUI:
                 data['all_classes'], 
                 timestamp
             )
+            # Also update bin counts when classification happens
+            self._update_bin_count(data['result'])
+    
+    def _update_bin_count(self, classified_item: str):
+        """Update bin count when an item is classified"""
+        if classified_item in self.bin_counts:
+            # Increment the count (with capacity limit)
+            if self.bin_counts[classified_item] < self.bin_capacity:
+                self.bin_counts[classified_item] += 1
+                
+                # Update the visual display
+                progress = getattr(self, f"{classified_item}_progress")
+                count_label = getattr(self, f"{classified_item}_count_label")
+                
+                progress.set(self.bin_counts[classified_item] / self.bin_capacity)
+                count_label.configure(text=f"{self.bin_counts[classified_item]}/{self.bin_capacity}")
+                
+                # Simulate coin dispensing (decrease coin count)
+                if self.coin_count > 0:
+                    self.coin_count -= 1
+                    self.coin_progress.set(self.coin_count / self.coin_capacity)
+                    self.coin_count_label.configure(text=f"{self.coin_count}/{self.coin_capacity} coins")
+                
+                self._add_message(f"[BIN UPDATE] {classified_item.title()} bin: {self.bin_counts[classified_item]}/{self.bin_capacity} | Coins: {self.coin_count}/{self.coin_capacity}", "info")
+    
+    def _update_bin_visualization(self):
+        """Update bin visualization with persistent stats"""
+        try:
+            # Map bin stats to visual bins
+            bin_mapping = {
+                0: 'plastic',   # Blue bin
+                1: 'metal',     # Orange bin  
+                2: 'paper',     # Green bin
+                3: 'misc'       # Gray bin
+            }
+            
+            for bin_id, bin_type in bin_mapping.items():
+                if bin_type in self.bin_counts:
+                    # Update count from persistent stats
+                    persistent_count = self.bin_stats[bin_id]['count']
+                    if persistent_count != self.bin_counts[bin_type]:
+                        self.bin_counts[bin_type] = min(persistent_count, self.bin_capacity)
+                        
+                        # Update visual display
+                        progress = getattr(self, f"{bin_type}_progress")
+                        count_label = getattr(self, f"{bin_type}_count_label")
+                        
+                        progress.set(self.bin_counts[bin_type] / self.bin_capacity)
+                        count_label.configure(text=f"{self.bin_counts[bin_type]}/{self.bin_capacity}")
+            
+            # Update coin display (simulate based on total items processed)
+            coins_used = self.total_items_processed // 3  # 1 coin per 3 items
+            self.coin_count = max(0, self.coin_capacity - coins_used)
+            
+            if hasattr(self, 'coin_progress'):
+                self.coin_progress.set(self.coin_count / self.coin_capacity)
+                self.coin_count_label.configure(text=f"{self.coin_count}/{self.coin_capacity} coins")
+                
+        except Exception as e:
+            # Silently fail for missing visual elements during initialization
+            pass
     
     def _add_message(self, message: str, tag: str = ""):
         """Add a message to the log"""
@@ -484,6 +1042,9 @@ class SmartBinGUI:
     def _update_classification_display(self, result: str, confidence: float, all_classes: Dict[str, float], timestamp: str):
         """Update the classification results display"""
         try:
+            # Update session stats with the classified item
+            self._update_session_stats(result)
+            
             # Clear existing widgets
             for widget in self.classification_results.winfo_children():
                 widget.destroy()
@@ -573,6 +1134,8 @@ class SmartBinGUI:
         try:
             self._add_message("[GUI] 🛑 Disconnecting...", "info")
             self.running = False
+            self.connected = False
+            self.reconnect_attempts = 0  # Reset reconnection attempts
             
             if self.protocol:
                 self.protocol.stop()
@@ -587,25 +1150,126 @@ class SmartBinGUI:
             
         except Exception as e:
             self._add_message(f"[GUI] ❌ DISCONNECT ERROR: {e}", "error")
+            self.connected = False
+            self.status_label.configure(text="🔴 Disconnected")
+            self.connect_btn.configure(text="🔗 Connect", state="normal")
+    
+    def _monitor_connection(self):
+        """Monitor connection status and attempt reconnection if needed"""
+        if not self.running:
+            return
+            
+        try:
+            # Check if protocol is still alive
+            if self.protocol and hasattr(self.protocol, 'is_connected'):
+                if not self.protocol.is_connected():
+                    self._handle_disconnection()
+            elif self.protocol_thread and not self.protocol_thread.is_alive():
+                self._handle_disconnection()
+        except Exception as e:
+            self._add_message(f"[GUI] ⚠️ Connection monitoring error: {e}", "error")
+        
+        # Schedule next check
+        if self.running and self.connected:
+            self.root.after(5000, self._monitor_connection)  # Check every 5 seconds
+    
+    def _handle_disconnection(self):
+        """Handle unexpected disconnection"""
+        if not self.connected:
+            return  # Already handling disconnection
+            
+        self.connected = False
+        self._add_message("[GUI] ⚠️ Connection lost! Attempting to reconnect...", "error")
+        self.status_label.configure(text="🟡 Reconnecting...")
+        self.connect_btn.configure(text="🔄 Reconnecting...", state="disabled")
+        
+        # Start reconnection attempts
+        self.reconnect_attempts = 0
+        self._attempt_reconnection()
+    
+    def _attempt_reconnection(self):
+        """Attempt to reconnect to ESP32"""
+        if not self.running or self.connected:
+            return
+            
+        self.reconnect_attempts += 1
+        max_attempts = 5
+        
+        if self.reconnect_attempts > max_attempts:
+            self._add_message(f"[GUI] ❌ Failed to reconnect after {max_attempts} attempts", "error")
+            self.status_label.configure(text="🔴 Connection Lost")
+            self.connect_btn.configure(text="🔗 Reconnect", state="normal")
+            self.running = False
+            return
+        
+        try:
+            self._add_message(f"[GUI] 🔄 Reconnection attempt {self.reconnect_attempts}/{max_attempts}...", "info")
+            
+            # Clean up old protocol
+            if self.protocol:
+                try:
+                    self.protocol.stop()
+                except:
+                    pass
+            
+            # Create new protocol instance
+            mac_address = self.mac_entry.get().strip()
+            self.protocol = self.protocol_class(
+                self,
+                esp32_mac=mac_address,
+                rfcomm_device="/dev/rfcomm0",
+                baudrate=115200
+            )
+            
+            # Try to reconnect
+            success = self.protocol.start()
+            if success:
+                self.connected = True
+                self.status_label.configure(text="🟢 Reconnected")
+                self.connect_btn.configure(text="🔌 Disconnect", state="normal")
+                self._add_message("[GUI] ✅ Successfully reconnected!", "info")
+                self._monitor_connection()  # Resume monitoring
+            else:
+                # Schedule next attempt
+                self.root.after(3000, self._attempt_reconnection)  # Wait 3 seconds
+                
+        except Exception as e:
+            self._add_message(f"[GUI] ❌ Reconnection attempt failed: {e}", "error")
+            # Schedule next attempt
+            self.root.after(3000, self._attempt_reconnection)
     
     def _run_protocol(self):
         """Run the protocol in a separate thread"""
         try:
+            self._add_message("[GUI] 🔗 Attempting to connect...", "info")
             success = self.protocol.start()
             if success:
+                self.connected = True
+                self.last_connection_time = datetime.now()
+                self.system_stats['successful_connections'] += 1
                 self.root.after(0, lambda: self.status_label.configure(text="🟢 Connected"))
                 self.root.after(0, lambda: self.connect_btn.configure(text="🔌 Disconnect", state="normal"))
+                self._add_message("[GUI] ✅ Successfully connected to ESP32", "info")
+                
+                # Start connection monitoring
+                self._monitor_connection()
             else:
+                self.connected = False
+                self.system_stats['connection_failures'] += 1
                 self.root.after(0, lambda: self.status_label.configure(text="🔴 Connection Failed"))
                 self.root.after(0, lambda: self.connect_btn.configure(text="🔗 Connect", state="normal"))
                 self.running = False
+                self._add_message("[GUI] ❌ Failed to connect to ESP32", "error")
         except Exception as e:
+            self.connected = False
             self.message_queue.put({
                 'type': 'error',
                 'message': f"Protocol error: {e}",
                 'timestamp': datetime.now().strftime("%H:%M:%S")
             })
             self.running = False
+            self.root.after(0, lambda: self.status_label.configure(text="🔴 Connection Error"))
+            self.root.after(0, lambda: self.connect_btn.configure(text="🔗 Connect", state="normal"))
     
     def _send_manual_command(self):
         """Send a manual command"""
@@ -655,15 +1319,159 @@ class SmartBinGUI:
         self.message_log.config(state=tk.DISABLED)
         self._add_message("[GUI] 🗑️ Message log cleared", "info")
     
+    def _load_persistent_stats(self):
+        """Load persistent statistics from file"""
+        try:
+            stats_file = "smartbin_stats.json"
+            if os.path.exists(stats_file):
+                with open(stats_file, 'r') as f:
+                    data = json.load(f)
+                    self.bin_stats = data.get('bin_stats', self.bin_stats)
+                    self.system_stats = data.get('system_stats', self.system_stats)
+                    self.total_items_processed = data.get('total_items_processed', 0)
+                    
+                    # Convert timestamp strings back to datetime objects
+                    for bin_id in self.bin_stats:
+                        if self.bin_stats[bin_id]['last_updated']:
+                            self.bin_stats[bin_id]['last_updated'] = datetime.fromisoformat(
+                                self.bin_stats[bin_id]['last_updated']
+                            )
+                    
+                    if self.system_stats['last_maintenance']:
+                        self.system_stats['last_maintenance'] = datetime.fromisoformat(
+                            self.system_stats['last_maintenance']
+                        )
+        except Exception as e:
+            print(f"⚠️ Could not load stats: {e}")
+    
+    def _save_persistent_stats(self):
+        """Save persistent statistics to file"""
+        try:
+            # Prepare data for JSON serialization
+            data = {
+                'bin_stats': {},
+                'system_stats': self.system_stats.copy(),
+                'total_items_processed': self.total_items_processed,
+                'last_saved': datetime.now().isoformat()
+            }
+            
+            # Convert datetime objects to strings
+            for bin_id in self.bin_stats:
+                data['bin_stats'][bin_id] = self.bin_stats[bin_id].copy()
+                if data['bin_stats'][bin_id]['last_updated']:
+                    data['bin_stats'][bin_id]['last_updated'] = data['bin_stats'][bin_id]['last_updated'].isoformat()
+            
+            if data['system_stats']['last_maintenance']:
+                data['system_stats']['last_maintenance'] = data['system_stats']['last_maintenance'].isoformat()
+            
+            stats_file = "smartbin_stats.json"
+            with open(stats_file, 'w') as f:
+                json.dump(data, f, indent=2)
+                
+        except Exception as e:
+            print(f"⚠️ Could not save stats: {e}")
+    
+    def _start_stats_updates(self):
+        """Start the stats update loop"""
+        self._update_stats_display()
+        
+    def _update_stats_display(self):
+        """Update the stats display in the GUI"""
+        try:
+            # Update uptime
+            if self.connected and self.last_connection_time:
+                current_uptime = datetime.now() - self.last_connection_time
+                uptime_str = str(current_uptime).split('.')[0]  # Remove microseconds
+            else:
+                uptime_str = "Not connected"
+            
+            # Update title with connection status and uptime
+            if self.connected:
+                self.root.title(f"🤖 SmartBin Control Center - 🟢 Connected | ⏱️ {uptime_str}")
+            else:
+                session_time = datetime.now() - self.session_start_time
+                session_str = str(session_time).split('.')[0]
+                self.root.title(f"🤖 SmartBin Control Center - 🔴 Disconnected | 📊 Session: {session_str}")
+            
+            # Update bin status with persistent counts
+            self._update_bin_visualization()
+            
+            # Save stats periodically
+            self._save_persistent_stats()
+            
+        except Exception as e:
+            print(f"⚠️ Stats update error: {e}")
+        
+        # Schedule next update
+        self.root.after(1000, self._update_stats_display)  # Update every second
+    
+    def _update_session_stats(self, waste_type: str):
+        """Update session statistics when item is classified"""
+        try:
+            # Map waste type to bin index
+            type_to_bin = {
+                'plastic': 0,
+                'metal': 1, 
+                'paper': 2,
+                'misc': 3
+            }
+            
+            bin_id = type_to_bin.get(waste_type.lower(), 3)  # Default to misc
+            
+            # Update bin stats
+            self.bin_stats[bin_id]['count'] += 1
+            self.bin_stats[bin_id]['last_updated'] = datetime.now()
+            
+            # Update system stats
+            self.total_items_processed += 1
+            self.system_stats['total_classifications'] += 1
+            
+            # Simulate coin dispensing (would be controlled by ESP32 in real system)
+            if self.bin_stats[bin_id]['count'] % 3 == 0:  # Dispense coin every 3 items
+                self.system_stats['coins_dispensed'] += 1
+                self._add_message(f"[SYSTEM] 🪙 Coin dispensed! Total: {self.system_stats['coins_dispensed']}", "info")
+            
+        except Exception as e:
+            print(f"⚠️ Session stats update error: {e}")
+    
+    def _get_stats_summary(self):
+        """Get a summary of current stats for display"""
+        try:
+            total_items = sum(self.bin_stats[i]['count'] for i in range(4))
+            
+            if self.connected and self.last_connection_time:
+                uptime = datetime.now() - self.last_connection_time
+                uptime_str = str(uptime).split('.')[0]
+            else:
+                uptime_str = "Not connected"
+            
+            return {
+                'total_items': total_items,
+                'items_today': self.total_items_processed,
+                'coins_dispensed': self.system_stats['coins_dispensed'],
+                'uptime': uptime_str,
+                'connection_status': 'Connected' if self.connected else 'Disconnected',
+                'bin_fullness': {
+                    i: f"{self.bin_stats[i]['count']}/10" for i in range(4)
+                }
+            }
+        except Exception as e:
+            print(f"⚠️ Stats summary error: {e}")
+            return {}
+    
     def run(self):
         """Run the GUI application"""
         try:
             self._add_message("[GUI] 🚀 SmartBin Control Center started", "info")
             self._add_message("[GUI] 💡 Enter ESP32 MAC address and click Connect", "info")
+            self._add_message("[GUI] 🔐 Administrator password verified and ready", "info")
             self.root.mainloop()
         except KeyboardInterrupt:
             print("\n🛑 GUI interrupted by user")
         finally:
+            # Clear password from memory for security
+            if hasattr(self, 'sudo_password'):
+                self.sudo_password = None
             self._disconnect()
 
 def main():
