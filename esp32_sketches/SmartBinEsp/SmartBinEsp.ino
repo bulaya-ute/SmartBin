@@ -270,6 +270,14 @@ void loop() {
       detectedClass = "misc";
     }
 
+    // Extract class name from result (remove confidence score if present)
+    int spaceIndex = detectedClass.indexOf(' ');
+    if (spaceIndex > 0) {
+      String originalResult = detectedClass;
+      detectedClass = detectedClass.substring(0, spaceIndex);
+      logMessage("[Processing] Extracted class '" + detectedClass + "' from result '" + originalResult + "'");
+    }
+
     // Step 3: Execute sorting based on classification result
     yield(); // Prevent watchdog timeout
     

@@ -3,8 +3,9 @@
 #include "mbedtls/base64.h"  // For Base64 encoding
 #include "Logger.h"  // For centralized logging
 
-// Flash LED pin for AI Thinker ESP32-CAM
-#define FLASH_LED_PIN 4  // GPIO 4 is the flash LED on AI Thinker
+// Flash LED pin for AI Thinker ESP32-CAM - DISABLED for servo use
+// #define FLASH_LED_PIN 4  // GPIO 4 now used for sliding motor servo
+// Note: Flash functionality sacrificed for motor control
 
 // Camera configuration for ESP32-CAM (AI Thinker model)
 static camera_config_t camera_config = {
@@ -43,8 +44,8 @@ bool initCamera() {
     LOG_CAMERA("Initializing ESP32-CAM (AI Thinker)...");
     yield(); // Prevent watchdog timeout
     
-    // Initialize flash LED
-    initFlash();
+    // Initialize flash LED - DISABLED (GPIO 4 used for servo)
+    // initFlash();
     
     // Configure camera based on PSRAM availability - using lower resolutions for better Bluetooth transmission
     if (psramFound()) {
@@ -153,8 +154,8 @@ CapturedImage captureImage() {
         }
     }
     
-    // Turn on flash before capture
-    flashOn();
+    // Turn on flash before capture - DISABLED (GPIO 4 used for servo)
+    // flashOn();
     
     // Add delay to allow flash to illuminate properly
     delay(150);
@@ -162,8 +163,8 @@ CapturedImage captureImage() {
     // Now capture a fresh frame
     camera_fb_t* frameBuffer = esp_camera_fb_get();
     
-    // Turn off flash immediately after capture attempt
-    flashOff();
+    // Turn off flash immediately after capture attempt - DISABLED (GPIO 4 used for servo)
+    // flashOff();
     
     if (!frameBuffer) {
         LOG_ERROR("Failed to capture image");
@@ -236,19 +237,18 @@ void clearDMABuffers() {
 }
 
 void initFlash() {
-    pinMode(FLASH_LED_PIN, OUTPUT);
-    digitalWrite(FLASH_LED_PIN, LOW); // Ensure flash starts OFF
-    LOG_CAMERA("Flash LED initialized (GPIO 4)");
+    // Flash functionality disabled - GPIO 4 now used for sliding motor servo
+    LOG_CAMERA("Flash LED disabled (GPIO 4 used for servo)");
 }
 
 void flashOn() {
-    digitalWrite(FLASH_LED_PIN, HIGH);
-    LOG_DEBUG("Flash ON");
+    // Flash functionality disabled - GPIO 4 now used for sliding motor servo
+    LOG_DEBUG("Flash disabled (GPIO 4 used for servo)");
 }
 
 void flashOff() {
-    digitalWrite(FLASH_LED_PIN, LOW);
-    LOG_DEBUG("Flash OFF");
+    // Flash functionality disabled - GPIO 4 now used for sliding motor servo
+    LOG_DEBUG("Flash disabled (GPIO 4 used for servo)");
 }
 
 void checkCameraStatus() {

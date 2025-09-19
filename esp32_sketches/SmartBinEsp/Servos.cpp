@@ -2,10 +2,10 @@
 
 Servo coinServo, slidingServo; // lidServo and droppingServo removed
 
-// Pin assignments (update to match your wiring)
-int COIN_DISPENSER_PIN = 14;
+// Pin assignments - Prioritizing motor functionality over flash LED
+int COIN_DISPENSER_PIN = 13;  // Changed from 14 to GPIO 13
 // int LID_MOTOR_PIN      = 13;  // Removed - hardware no longer present
-int SLIDING_MOTOR_PIN  = 15;
+int SLIDING_MOTOR_PIN  = 4;   // Changed from 15 to GPIO 4 (former flash LED pin)
 // int DROPPING_MOTOR_PIN = 16;  // Removed - only using two motors now
 
 // Current position tracking for each servo
