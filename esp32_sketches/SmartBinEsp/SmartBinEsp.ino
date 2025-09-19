@@ -1,6 +1,5 @@
 #include "Camera.h"
 #include "Classification.h" 
-#include "LEDs.h"
 #include "Servos.h"
 #include "Ultrasonic.h"
 #include "Logger.h"
@@ -29,6 +28,8 @@ unsigned long lastTrigger = 0;
 const unsigned long triggerInterval = 10000; // 10 sec minimum between detections
 bool isProcessing = false; // Prevent re-trigger during processing
 
+// Old position constants - no longer used with new two-motor system
+/*
 // Bin positions (servo angles or stepper steps)
 const int POSITION_ZERO = 90;     // Default waiting position
 const int POSITION_PLASTIC = 0;
@@ -39,6 +40,15 @@ const int POSITION_MISC = 180;
 // Release mechanism angle (example: 0 = closed, 90 = open)
 const int RELEASE_OPEN = 90;
 const int RELEASE_CLOSED = 0;
+*/
+
+// New two-motor system constants
+const int SLIDING_HOME = 90;       // Sliding motor home position
+const int SLIDING_WASTE = 0;       // Waste bin position (paper/misc)
+const int SLIDING_RECYCLABLE = 180; // Recyclable bin position (metal/plastic)
+
+const int COIN_HOME = 0;           // Coin dispenser home position
+const int COIN_DISPENSE = 100;     // Coin dispense position
 
 // Distance threshold for object detection (in cm)
 const float DETECTION_THRESHOLD = 10.0f;
@@ -62,39 +72,48 @@ void setup() {
   // Print logger status
   printLoggerStatus();
 
-  // TODO: Uncomment out servo init when ready
-  // // Initialize modules one by one with debug messages
-  // LOG_BOOT("Initializing Servos...");
-  // yield(); // Prevent watchdog timeout
-  // 
-  // // Wrap in try-catch to handle potential crashes
-  // try {
-  //   initServos();
-  //   delay(1000); // Give system time to breathe
-  //   LOG_BOOT("✅ Servos initialized");
-  // } catch (...) {
-  //   LOG_BOOT("⚠️ Warning: Servo initialization failed");
-  // }
-
-  // Initialize LEDs (PCF8575 with P0=Red, P1=Orange, P2=Green)
-  LOG_BOOT("Initializing LEDs...");
+  // Initialize servos for two-motor system
+  LOG_BOOT("Initializing Servos...");
   yield(); // Prevent watchdog timeout
-
+  
+  // Wrap in try-catch to handle potential crashes
   try {
-    initLEDs();
-    delay(100); // Give system time to breathe
-    LOG_BOOT("✅ LEDs initialized");
+    initServos();
+    delay(1000); // Give system time to breathe
+    LOG_BOOT("✅ Servos initialized");
     
-    // Set initial status LED to indicate initialization complete
-    setSystemState(SYSTEM_STATUS);
-    delay(500); // Show red LED briefly
+    // Test servo movement to ensure they're working
+    LOG_BOOT("Testing servo movement...");
     
-    // Then switch to ready state
-    setSystemState(SYSTEM_READY);
+    // Check if servos are properly attached before testing
+    Serial.println("[Servo Debug] Checking servo attachment status...");
+    
+    // Test coin dispenser
+    logMessage("[Servo Test] Testing coin dispenser movement");
+    Serial.println("[Debug] About to move coin dispenser to 50°");
+    rotateCoinDispenser(50);  // Move to middle position
+    delay(1000);
+    Serial.println("[Debug] About to move coin dispenser to 0°");
+    rotateCoinDispenser(0);   // Return to home
+    delay(500);
+    
+    // Test sliding motor
+    logMessage("[Servo Test] Testing sliding motor movement");
+    Serial.println("[Debug] About to move sliding motor to 45°");
+    rotateSlidingMotor(45);   // Move to test position
+    delay(1000);
+    Serial.println("[Debug] About to move sliding motor to 90°");
+    rotateSlidingMotor(90);   // Return to home
+    delay(500);
+    
+    LOG_BOOT("✅ Servo movement test completed");
     
   } catch (...) {
-    LOG_BOOT("⚠️ Warning: LED initialization failed");
+    LOG_BOOT("⚠️ Warning: Servo initialization failed");
   }
+
+  // LED and buzzer functionality removed for stability
+  LOG_BOOT("LED and buzzer functionality disabled");
 
   // Initialize ultrasonic sensor
   LOG_BOOT("Initializing Ultrasonic...");
@@ -237,17 +256,12 @@ void loop() {
     lastTrigger = currentMillis;
     isProcessing = true;
 
-    // Set system to busy state (orange LED)
-    setSystemState(SYSTEM_BUSY);
+    // System processing state (LED functionality disabled)
+    // setSystemState(SYSTEM_BUSY);
 
     logMessage("[Detection] Item detected! Starting sorting cycle...");
 
-    // Step 2: Close bin lid
-    yield(); // Prevent watchdog timeout
-    closeBinLid();
-    // No delay needed - servo handles its own timing
-
-    // Step 3: Capture image
+    // Step 2: Capture image (bin lid motor removed)
     yield(); // Prevent watchdog timeout
     String detectedClass = captureAndClassify();
 
@@ -256,34 +270,36 @@ void loop() {
       detectedClass = "misc";
     }
 
-    // Step 4: Map class to position
+    // Step 3: Execute sorting based on classification result
     yield(); // Prevent watchdog timeout
-    int targetPosition = getTargetPosition(detectedClass);
+    
+    if (detectedClass == "misc" || detectedClass == "paper") {
+      // Paper/Misc: Rotate sliding motor to 0° and hold
+      logMessage("[Sorting] Paper/Misc detected - routing to waste bin");
+      rotateSlidingMotor(0);  // Move to waste position
+      delay(3000);  // Hold for 3 seconds
+      rotateSlidingMotor(90); // Return to home position
+    } 
+    else if (detectedClass == "metal" || detectedClass == "plastic") {
+      // Metal/Plastic: Dispense coin, then route to recyclable bin
+      logMessage("[Sorting] Recyclable material detected - dispensing coin and routing to recyclable bin");
+      
+      // First: Dispense coin
+      rotateCoinDispenser(100);  // Dispense coin
+      delay(1000);  // Hold dispense position
+      rotateCoinDispenser(0);    // Return to home
+      delay(500);   // Brief pause
+      
+      // Then: Route to recyclable bin
+      rotateSlidingMotor(180);   // Move to recyclable position  
+      delay(3000);  // Hold for 3 seconds
+      rotateSlidingMotor(90);    // Return to home position
+    }
 
-    // Step 5: Slide compartment to correct bin
-    yield(); // Prevent watchdog timeout
-    moveToPosition(targetPosition);
-    // No delay needed - servo handles its own timing
+    logMessage("[Cycle Complete] Sorted '" + detectedClass + "' - motors returned to home.");
 
-    // Step 6: Open release to drop item
-    yield(); // Prevent watchdog timeout
-    setRelease(true);
-    delay(1000); // Keep this delay for gravity - item needs time to fall
-    setRelease(false); // Close release
-
-    // Step 7: Return compartment to zero
-    yield(); // Prevent watchdog timeout
-    moveToPosition(POSITION_ZERO);
-    // No delay needed - servo handles its own timing
-
-    // Step 8: Open lid for next item
-    yield(); // Prevent watchdog timeout
-    openBinLid();
-
-    logMessage("[Cycle Complete] Sorted '" + detectedClass + "' into respective bin.");
-
-    // Return system to ready state (green LED)
-    setSystemState(SYSTEM_READY);
+    // Return system to ready state (LED functionality disabled)
+    // setSystemState(SYSTEM_READY);
 
     isProcessing = false;
   }
@@ -418,16 +434,21 @@ String captureAndClassify() {
   return detectedClass;
 }
 
+// Old position-based functions removed - now using direct motor control
+/*
 int getTargetPosition(String className) {
   if (className == "plastic") return POSITION_PLASTIC;
   if (className == "metal") return POSITION_METAL;
   if (className == "paper") return POSITION_PAPER;
   return POSITION_MISC; // default
 }
+*/
 
-// === Servo/Actuator Control (to be implemented in Servos.h/.cpp) ===
-// These are just wrappers — actual servo control goes in Servos.cpp
+// === Two-Motor Control System ===
+// Direct motor control - no wrapper functions needed anymore
 
+// Old servo wrapper functions removed - using direct calls now
+/*
 void moveToPosition(int position) {
   int currentPos = getCurrentSlidingPosition();
   int displacement = abs(position - currentPos);
@@ -442,19 +463,6 @@ void setRelease(bool open) {
   logMessage((open ? "[Release] Opening" : "[Release] Closing") + String(" from ") + String(currentPos) + "° to " + String(angle) + "° (displacement: " + String(displacement) + "°)");
   rotateDroppingMotor(angle); // Or actuate solenoid, etc.
 }
+*/
 
-void openBinLid() {
-  const int LID_OPEN_ANGLE = 90; // Define this based on your lid mechanism
-  int currentPos = getCurrentLidPosition();
-  int displacement = abs(LID_OPEN_ANGLE - currentPos);
-  logMessage("[Lid] Opening bin lid from " + String(currentPos) + "° to " + String(LID_OPEN_ANGLE) + "° (displacement: " + String(displacement) + "°)");
-  rotateLid(LID_OPEN_ANGLE);
-}
-
-void closeBinLid() {
-  const int LID_CLOSED_ANGLE = 0; // Define this based on your lid mechanism
-  int currentPos = getCurrentLidPosition();
-  int displacement = abs(LID_CLOSED_ANGLE - currentPos);
-  logMessage("[Lid] Closing bin lid from " + String(currentPos) + "° to " + String(LID_CLOSED_ANGLE) + "° (displacement: " + String(displacement) + "°)");
-  rotateLid(LID_CLOSED_ANGLE);
-}
+// Bin lid functions removed - hardware no longer present
