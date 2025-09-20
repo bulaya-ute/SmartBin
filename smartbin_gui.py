@@ -41,6 +41,8 @@ class SmartBinGUI:
         self.running = False
         self.connected = False
         self.reconnect_attempts = 0
+        self.auto_reconnect = True  # Enable automatic reconnection
+        self.max_reconnect_interval = 30  # Max delay between attempts (seconds)
         self.sudo_password = None  # Stored sudo password for session
         
         # GUI state
@@ -392,6 +394,16 @@ class SmartBinGUI:
             width=120
         )
         self.connect_btn.pack(side="left", padx=(0, 10))
+        
+        # Auto-reconnect toggle
+        self.auto_reconnect_var = ctk.BooleanVar(value=True)
+        self.auto_reconnect_switch = ctk.CTkSwitch(
+            self.connection_frame,
+            text="Auto-Reconnect",
+            variable=self.auto_reconnect_var,
+            command=self._toggle_auto_reconnect
+        )
+        self.auto_reconnect_switch.pack(side="left", padx=(0, 20))
         
         # ESP32 MAC input
         self.mac_label = ctk.CTkLabel(self.connection_frame, text="ESP32 MAC:")
@@ -1099,6 +1111,17 @@ class SmartBinGUI:
         else:
             self._disconnect()
     
+    def _toggle_auto_reconnect(self):
+        """Toggle auto-reconnect feature"""
+        self.auto_reconnect = self.auto_reconnect_var.get()
+        status = "enabled" if self.auto_reconnect else "disabled"
+        self._add_message(f"[GUI] 🔄 Auto-reconnect {status}", "info")
+        
+        # If disabled while reconnecting, stop attempts
+        if not self.auto_reconnect and not self.connected:
+            self.status_label.configure(text="🔴 Disconnected")
+            self.connect_btn.configure(text="🔗 Connect", state="normal")
+    
     def _connect(self):
         """Connect to ESP32"""
         try:
@@ -1110,6 +1133,10 @@ class SmartBinGUI:
             self._add_message("[GUI] 🔗 Connecting to ESP32...", "info")
             self.status_label.configure(text="🟡 Connecting...")
             self.connect_btn.configure(text="⏳ Connecting...", state="disabled")
+            
+            # Enable auto-reconnect for new connections
+            self.auto_reconnect = True
+            self.reconnect_attempts = 0
             
             # Create protocol instance
             self.protocol = self.protocol_class(
@@ -1135,6 +1162,7 @@ class SmartBinGUI:
             self._add_message("[GUI] 🛑 Disconnecting...", "info")
             self.running = False
             self.connected = False
+            self.auto_reconnect = False  # Disable auto-reconnect on manual disconnect
             self.reconnect_attempts = 0  # Reset reconnection attempts
             
             if self.protocol:
@@ -1180,30 +1208,31 @@ class SmartBinGUI:
             
         self.connected = False
         self._add_message("[GUI] ⚠️ Connection lost! Attempting to reconnect...", "error")
-        self.status_label.configure(text="🟡 Reconnecting...")
-        self.connect_btn.configure(text="🔄 Reconnecting...", state="disabled")
         
-        # Start reconnection attempts
-        self.reconnect_attempts = 0
-        self._attempt_reconnection()
+        if self.auto_reconnect:
+            self.status_label.configure(text="🟡 Reconnecting...")
+            self.connect_btn.configure(text="🔄 Auto-Reconnecting...", state="disabled")
+            
+            # Start reconnection attempts
+            self.reconnect_attempts = 0
+            self._attempt_reconnection()
+        else:
+            self.status_label.configure(text="🔴 Connection Lost")
+            self.connect_btn.configure(text="🔗 Connect", state="normal")
+            self._add_message("[GUI] ℹ️ Auto-reconnect disabled. Click Connect to reconnect manually.", "info")
     
     def _attempt_reconnection(self):
-        """Attempt to reconnect to ESP32"""
-        if not self.running or self.connected:
+        """Attempt to reconnect to ESP32 with exponential backoff"""
+        if not self.running or self.connected or not self.auto_reconnect:
             return
             
         self.reconnect_attempts += 1
-        max_attempts = 5
         
-        if self.reconnect_attempts > max_attempts:
-            self._add_message(f"[GUI] ❌ Failed to reconnect after {max_attempts} attempts", "error")
-            self.status_label.configure(text="🔴 Connection Lost")
-            self.connect_btn.configure(text="🔗 Reconnect", state="normal")
-            self.running = False
-            return
+        # Calculate delay with exponential backoff (1, 2, 4, 8, 16, 30, 30, ...)
+        delay = min(2 ** min(self.reconnect_attempts - 1, 4), self.max_reconnect_interval)
         
         try:
-            self._add_message(f"[GUI] 🔄 Reconnection attempt {self.reconnect_attempts}/{max_attempts}...", "info")
+            self._add_message(f"[GUI] 🔄 Reconnection attempt #{self.reconnect_attempts} (next in {delay}s)...", "info")
             
             # Clean up old protocol
             if self.protocol:
@@ -1225,18 +1254,22 @@ class SmartBinGUI:
             success = self.protocol.start()
             if success:
                 self.connected = True
+                attempts_made = self.reconnect_attempts
+                self.reconnect_attempts = 0  # Reset counter on success
                 self.status_label.configure(text="🟢 Reconnected")
                 self.connect_btn.configure(text="🔌 Disconnect", state="normal")
-                self._add_message("[GUI] ✅ Successfully reconnected!", "info")
+                self._add_message(f"[GUI] ✅ Successfully reconnected after {attempts_made} attempts!", "info")
                 self._monitor_connection()  # Resume monitoring
+                return
             else:
-                # Schedule next attempt
-                self.root.after(3000, self._attempt_reconnection)  # Wait 3 seconds
+                # Schedule next attempt with exponential backoff
+                self._add_message(f"[GUI] ⚠️ Reconnect failed, retrying in {delay} seconds...", "warning")
+                self.root.after(delay * 1000, self._attempt_reconnection)
                 
         except Exception as e:
             self._add_message(f"[GUI] ❌ Reconnection attempt failed: {e}", "error")
-            # Schedule next attempt
-            self.root.after(3000, self._attempt_reconnection)
+            # Schedule next attempt with exponential backoff
+            self.root.after(delay * 1000, self._attempt_reconnection)
     
     def _run_protocol(self):
         """Run the protocol in a separate thread"""
