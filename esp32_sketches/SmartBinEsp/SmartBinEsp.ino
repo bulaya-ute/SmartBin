@@ -316,8 +316,8 @@ void loop() {
     String detectedClass = captureAndClassify();
 
     if (detectedClass == "unknown") {
-      logMessage("[Error] Classification failed or ambiguous. Routing to MISC.");
-      detectedClass = "misc";
+      logMessage("[Error] Classification failed or ambiguous. Routing to non-recyclable.");
+      detectedClass = "organic_waste"; // Default to a valid 9-class category
     }
 
     // Extract class name from result (remove confidence score if present)
@@ -480,8 +480,8 @@ String captureAndClassify() {
   
   // Check confidence and handle low-confidence results
   if (!isConfidentResult(result)) {
-    logMessage("[Classification] ⚠️ Low confidence result, routing to MISC bin");
-    detectedClass = "misc";
+    logMessage("[Classification] ⚠️ Low confidence result, routing to non-recyclable bin");
+    detectedClass = "organic_waste"; // Default to a valid 9-class category
   }
   
   // Step 5: Normalize class names to match bin positions
@@ -492,7 +492,9 @@ String captureAndClassify() {
   } else if (detectedClass == "Paper" || detectedClass == "Cardboard") {
     detectedClass = "paper";
   } else if (detectedClass != "plastic" && detectedClass != "metal" && detectedClass != "paper") {
-    detectedClass = "misc";
+    // For unrecognized classifications, default to organic_waste (non-recyclable)
+    logMessage("[Classification] ⚠️ Unrecognized class, defaulting to organic_waste");
+    detectedClass = "organic_waste";
   }
   
   logMessage("[Classification] ✅ Final classification: " + detectedClass);

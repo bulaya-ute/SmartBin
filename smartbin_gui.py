@@ -56,12 +56,10 @@ class SmartBinGUI:
         self.connection_uptime = timedelta()
         self.last_connection_time = None
         
-        # Bin stats (persistent across sessions)
+        # Bin stats (persistent across sessions) - Updated for 9-class binary system
         self.bin_stats = {
-            0: {"count": 0, "weight": 0.0, "last_updated": None},  # Plastic
-            1: {"count": 0, "weight": 0.0, "last_updated": None},  # Metal  
-            2: {"count": 0, "weight": 0.0, "last_updated": None},  # Paper
-            3: {"count": 0, "weight": 0.0, "last_updated": None}   # Misc
+            0: {"count": 0, "weight": 0.0, "last_updated": None},  # Recyclable bin
+            1: {"count": 0, "weight": 0.0, "last_updated": None},  # Non-recyclable bin
         }
         
         # System stats
@@ -222,12 +220,19 @@ class SmartBinGUI:
         self.bin_grid = ctk.CTkFrame(self.bin_status_frame)
         self.bin_grid.pack(fill="both", expand=True, padx=10, pady=(0, 10))
         
-        # Initialize bin counts (placeholder data)
+        # Initialize bin counts for 9-class system with binary mapping
         self.bin_counts = {
-            "plastic": 3,
-            "metal": 1, 
-            "paper": 5,
-            "misc": 2
+            # Recyclable materials
+            "aluminium": 0,
+            "carton": 0,
+            "glass": 0,
+            "paper_and_cardboard": 0,
+            "plastic": 0,
+            # Non-recyclable materials  
+            "ewaste": 0,
+            "organic_waste": 0,
+            "textile": 0,
+            "wood": 0
         }
         self.bin_capacity = 10
         self.coin_count = 7
@@ -236,56 +241,119 @@ class SmartBinGUI:
         self._create_bin_visualizations()
     
     def _create_bin_visualizations(self):
-        """Create the bin and coin visualizations"""
-        # Bin emojis and colors
-        bin_info = {
-            "plastic": {"emoji": "🥤", "color": "#2196F3"},
-            "metal": {"emoji": "🥫", "color": "#FF9800"},
-            "paper": {"emoji": "📄", "color": "#4CAF50"},
-            "misc": {"emoji": "🗑️", "color": "#9E9E9E"}
+        """Create the bin and coin visualizations for 9-class system"""
+        # Recyclable bin info
+        recyclable_info = {
+            "aluminium": {"emoji": "🥤", "color": "#C0C0C0"},
+            "carton": {"emoji": "📦", "color": "#8D6E63"},
+            "glass": {"emoji": "🍾", "color": "#4CAF50"}, 
+            "paper_and_cardboard": {"emoji": "📄", "color": "#FF9800"},
+            "plastic": {"emoji": "🥤", "color": "#2196F3"}
         }
         
-        # Create bin displays (2x2 grid)
-        for i, (bin_type, info) in enumerate(bin_info.items()):
-            row = i // 2
-            col = i % 2
+        # Non-recyclable bin info
+        non_recyclable_info = {
+            "ewaste": {"emoji": "💻", "color": "#9C27B0"},
+            "organic_waste": {"emoji": "🍎", "color": "#795548"},
+            "textile": {"emoji": "�", "color": "#E91E63"},
+            "wood": {"emoji": "🪵", "color": "#6D4C41"}
+        }
+        
+        # Create recyclable section
+        recyclable_frame = ctk.CTkFrame(self.bin_grid)
+        recyclable_frame.grid(row=0, column=0, columnspan=2, padx=5, pady=5, sticky="ew")
+        
+        recyclable_title = ctk.CTkLabel(
+            recyclable_frame,
+            text="♻️ Recyclable Materials",
+            font=ctk.CTkFont(size=14, weight="bold"),
+            text_color="#4CAF50"
+        )
+        recyclable_title.pack(pady=(5, 2))
+        
+        # Recyclable items grid
+        recyclable_grid = ctk.CTkFrame(recyclable_frame)
+        recyclable_grid.pack(fill="x", padx=5, pady=5)
+        
+        for i, (waste_type, info) in enumerate(recyclable_info.items()):
+            row = i // 3
+            col = i % 3
             
-            bin_frame = ctk.CTkFrame(self.bin_grid)
-            bin_frame.grid(row=row, column=col, padx=5, pady=5, sticky="nsew")
+            item_frame = ctk.CTkFrame(recyclable_grid, width=80, height=60)
+            item_frame.grid(row=row, column=col, padx=2, pady=2, sticky="ew")
+            item_frame.grid_propagate(False)
             
             # Configure grid weights
-            self.bin_grid.grid_rowconfigure(row, weight=1)
-            self.bin_grid.grid_columnconfigure(col, weight=1)
+            recyclable_grid.grid_rowconfigure(row, weight=1)
+            recyclable_grid.grid_columnconfigure(col, weight=1)
             
-            # Bin emoji and label
-            bin_label = ctk.CTkLabel(
-                bin_frame,
-                text=f"{info['emoji']}\n{bin_type.title()}",
-                font=ctk.CTkFont(size=14, weight="bold")
+            # Item emoji and label
+            item_label = ctk.CTkLabel(
+                item_frame,
+                text=f"{info['emoji']}\n{waste_type.replace('_', ' ').title()[:8]}",
+                font=ctk.CTkFont(size=10, weight="bold")
             )
-            bin_label.pack(pady=(5, 2))
-            
-            # Progress bar for bin fullness
-            progress = ctk.CTkProgressBar(
-                bin_frame,
-                width=80,
-                height=12,
-                progress_color=info['color']
-            )
-            progress.pack(pady=2)
-            progress.set(self.bin_counts[bin_type] / self.bin_capacity)
+            item_label.pack(pady=2)
             
             # Count label
             count_label = ctk.CTkLabel(
-                bin_frame,
-                text=f"{self.bin_counts[bin_type]}/{self.bin_capacity}",
-                font=ctk.CTkFont(size=12)
+                item_frame,
+                text=f"{self.bin_counts[waste_type]}",
+                font=ctk.CTkFont(size=12, weight="bold"),
+                text_color=info['color']
             )
-            count_label.pack(pady=(2, 5))
+            count_label.pack(pady=2)
             
             # Store references for updates
-            setattr(self, f"{bin_type}_progress", progress)
-            setattr(self, f"{bin_type}_count_label", count_label)
+            setattr(self, f"{waste_type}_count_label", count_label)
+        
+        # Create non-recyclable section
+        non_recyclable_frame = ctk.CTkFrame(self.bin_grid)
+        non_recyclable_frame.grid(row=1, column=0, columnspan=2, padx=5, pady=5, sticky="ew")
+        
+        non_recyclable_title = ctk.CTkLabel(
+            non_recyclable_frame,
+            text="🗑️ Non-Recyclable Materials",
+            font=ctk.CTkFont(size=14, weight="bold"),
+            text_color="#F44336"
+        )
+        non_recyclable_title.pack(pady=(5, 2))
+        
+        # Non-recyclable items grid
+        non_recyclable_grid = ctk.CTkFrame(non_recyclable_frame)
+        non_recyclable_grid.pack(fill="x", padx=5, pady=5)
+        
+        for i, (waste_type, info) in enumerate(non_recyclable_info.items()):
+            row = i // 2
+            col = i % 2
+            
+            item_frame = ctk.CTkFrame(non_recyclable_grid, width=120, height=60)
+            item_frame.grid(row=row, column=col, padx=2, pady=2, sticky="ew")
+            item_frame.grid_propagate(False)
+            
+            # Configure grid weights
+            non_recyclable_grid.grid_rowconfigure(row, weight=1)
+            non_recyclable_grid.grid_columnconfigure(col, weight=1)
+            
+            # Item emoji and label
+            item_label = ctk.CTkLabel(
+                item_frame,
+                text=f"{info['emoji']}\n{waste_type.replace('_', ' ').title()}",
+                font=ctk.CTkFont(size=10, weight="bold")
+            )
+            item_label.pack(pady=2)
+            
+            # Count label
+            count_label = ctk.CTkLabel(
+                item_frame,
+                text=f"{self.bin_counts[waste_type]}",
+                font=ctk.CTkFont(size=12, weight="bold"),
+                text_color=info['color']
+            )
+            count_label.pack(pady=2)
+            
+            # Store references for updates
+            setattr(self, f"{waste_type}_count_label", count_label)
         
         # Coin dispenser display
         coin_frame = ctk.CTkFrame(self.bin_grid)
@@ -683,7 +751,13 @@ class SmartBinGUI:
                         confidence = classification_result["confidence"]
                         all_classes = classification_result["all_confidences"]
                         
-                        # Send classification to GUI
+                        # Print raw YOLO backend results to console
+                        print(f"\n🤖 YOLO BACKEND RAW RESULTS:")
+                        print(f"   Top Class: {classification}")
+                        print(f"   Confidence: {confidence:.4f}")
+                        print(f"   All Classes: {all_classes}")
+                        
+                        # Send classification to GUI (full detailed result)
                         self.gui.message_queue.put({
                             'type': 'classification',
                             'result': classification,
@@ -692,12 +766,24 @@ class SmartBinGUI:
                             'timestamp': datetime.now().strftime("%H:%M:%S")
                         })
                         
-                        # Send classification result to ESP32
-                        result = f"{classification} {confidence:.2f}"
-                        if self._send_message("CLS01", result):
+                        # Map 9-class classification to binary for ESP32
+                        recyclable_classes = {
+                            'aluminium', 'carton', 'glass', 
+                            'paper_and_cardboard', 'plastic'
+                        }
+                        
+                        # Determine if item is recyclable
+                        if classification.lower() in recyclable_classes:
+                            binary_result = "recyclable"
+                        else:
+                            binary_result = "non-recyclable"
+                        
+                        # Send binary classification result to ESP32
+                        esp32_command = f"{binary_result} {confidence:.2f}"
+                        if self._send_message("CLS01", esp32_command):
                             self.gui.message_queue.put({
                                 'type': 'info',
-                                'message': f"✅ Sent classification: {result}",
+                                'message': f"✅ Sent to ESP32: {esp32_command} (from {classification})",
                                 'timestamp': datetime.now().strftime("%H:%M:%S")
                             })
                     else:
@@ -956,54 +1042,52 @@ class SmartBinGUI:
             self._update_bin_count(data['result'])
     
     def _update_bin_count(self, classified_item: str):
-        """Update bin count when an item is classified"""
+        """Update bin count when an item is classified (9-class system)"""
         if classified_item in self.bin_counts:
-            # Increment the count (with capacity limit)
-            if self.bin_counts[classified_item] < self.bin_capacity:
-                self.bin_counts[classified_item] += 1
-                
-                # Update the visual display
-                progress = getattr(self, f"{classified_item}_progress")
-                count_label = getattr(self, f"{classified_item}_count_label")
-                
-                progress.set(self.bin_counts[classified_item] / self.bin_capacity)
-                count_label.configure(text=f"{self.bin_counts[classified_item]}/{self.bin_capacity}")
-                
+            # Increment the count
+            self.bin_counts[classified_item] += 1
+            
+            # Update the visual display
+            count_label = getattr(self, f"{classified_item}_count_label", None)
+            if count_label:
+                count_label.configure(text=f"{self.bin_counts[classified_item]}")
+            
+            # Check if item is recyclable for coin dispensing
+            recyclable_classes = {
+                'aluminium', 'carton', 'glass', 
+                'paper_and_cardboard', 'plastic'
+            }
+            
+            if classified_item.lower() in recyclable_classes:
                 # Simulate coin dispensing (decrease coin count)
                 if self.coin_count > 0:
                     self.coin_count -= 1
                     self.coin_progress.set(self.coin_count / self.coin_capacity)
                     self.coin_count_label.configure(text=f"{self.coin_count}/{self.coin_capacity} coins")
-                
-                self._add_message(f"[BIN UPDATE] {classified_item.title()} bin: {self.bin_counts[classified_item]}/{self.bin_capacity} | Coins: {self.coin_count}/{self.coin_capacity}", "info")
+                    coin_msg = f" | Coin dispensed! Remaining: {self.coin_count}"
+                else:
+                    coin_msg = " | No coins left to dispense!"
+            else:
+                coin_msg = " | Non-recyclable (no coin)"
+            
+            self._add_message(f"[BIN UPDATE] {classified_item.replace('_', ' ').title()}: {self.bin_counts[classified_item]}{coin_msg}", "info")
     
     def _update_bin_visualization(self):
-        """Update bin visualization with persistent stats"""
+        """Update bin visualization with persistent stats for 9-class system"""
         try:
-            # Map bin stats to visual bins
-            bin_mapping = {
-                0: 'plastic',   # Blue bin
-                1: 'metal',     # Orange bin  
-                2: 'paper',     # Green bin
-                3: 'misc'       # Gray bin
+            # Update counts from bin_counts dictionary
+            for waste_type, count in self.bin_counts.items():
+                count_label = getattr(self, f"{waste_type}_count_label", None)
+                if count_label:
+                    count_label.configure(text=f"{count}")
+            
+            # Update coin display (simulate based on recyclable items processed)
+            recyclable_classes = {
+                'aluminium', 'carton', 'glass', 
+                'paper_and_cardboard', 'plastic'
             }
-            
-            for bin_id, bin_type in bin_mapping.items():
-                if bin_type in self.bin_counts:
-                    # Update count from persistent stats
-                    persistent_count = self.bin_stats[bin_id]['count']
-                    if persistent_count != self.bin_counts[bin_type]:
-                        self.bin_counts[bin_type] = min(persistent_count, self.bin_capacity)
-                        
-                        # Update visual display
-                        progress = getattr(self, f"{bin_type}_progress")
-                        count_label = getattr(self, f"{bin_type}_count_label")
-                        
-                        progress.set(self.bin_counts[bin_type] / self.bin_capacity)
-                        count_label.configure(text=f"{self.bin_counts[bin_type]}/{self.bin_capacity}")
-            
-            # Update coin display (simulate based on total items processed)
-            coins_used = self.total_items_processed // 3  # 1 coin per 3 items
+            recyclable_count = sum(self.bin_counts[cls] for cls in recyclable_classes if cls in self.bin_counts)
+            coins_used = min(recyclable_count, self.coin_capacity)  # 1 coin per recyclable item
             self.coin_count = max(0, self.coin_capacity - coins_used)
             
             if hasattr(self, 'coin_progress'):
@@ -1054,12 +1138,62 @@ class SmartBinGUI:
     def _update_classification_display(self, result: str, confidence: float, all_classes: Dict[str, float], timestamp: str):
         """Update the classification results display"""
         try:
+            # ======= DETAILED CONSOLE OUTPUT =======
+            print(f"\n{'='*60}")
+            print(f"🔍 DETAILED CLASSIFICATION RESULTS [{timestamp}]")
+            print(f"{'='*60}")
+            print(f"📊 Top Prediction: {result} ({confidence*100:.2f}%)")
+            print(f"📋 All Class Confidences:")
+            
+            # Sort classes by confidence for console display
+            sorted_classes = sorted(all_classes.items(), key=lambda x: x[1], reverse=True)
+            
+            # Print all classes with confidences
+            for i, (class_name, conf) in enumerate(sorted_classes):
+                rank_emoji = ["🥇", "🥈", "🥉"][i] if i < 3 else f"{i+1:2d}."
+                print(f"  {rank_emoji} {class_name:<20} : {conf*100:6.2f}%")
+            
+            # Check if class is recognized by our hard-coded system
+            known_classes = set(self.bin_counts.keys())
+            model_classes = set(all_classes.keys())
+            
+            print(f"\n🔧 System Analysis:")
+            print(f"  • Known Classes (Hard-coded): {sorted(known_classes)}")
+            print(f"  • Model Classes (Dynamic):    {sorted(model_classes)}")
+            
+            unknown_classes = model_classes - known_classes
+            if unknown_classes:
+                print(f"  ⚠️  Unknown Classes Detected: {sorted(unknown_classes)}")
+            else:
+                print(f"  ✅ All model classes are recognized by the system")
+            
+            # Binary mapping info
+            recyclable_classes = {
+                'aluminium', 'carton', 'glass', 
+                'paper_and_cardboard', 'plastic'
+            }
+            binary_result = "RECYCLABLE" if result.lower() in recyclable_classes else "NON-RECYCLABLE"
+            print(f"  🔄 Binary Mapping: {result} → {binary_result}")
+            print(f"{'='*60}\n")
+            
             # Update session stats with the classified item
             self._update_session_stats(result)
             
-            # Clear existing widgets
+            # Clear existing widgets (but preserve the frame structure)
             for widget in self.classification_results.winfo_children():
                 widget.destroy()
+            
+            # Ensure we have valid classification data
+            if not all_classes or not result:
+                # Restore default "no classification" message
+                self.no_classification_label = ctk.CTkLabel(
+                    self.classification_results,
+                    text="No classification data\nyet available",
+                    font=ctk.CTkFont(size=14),
+                    text_color=("gray50", "gray60")
+                )
+                self.no_classification_label.pack(expand=True)
+                return
             
             # Sort classes by confidence
             sorted_classes = sorted(all_classes.items(), key=lambda x: x[1], reverse=True)
@@ -1439,17 +1573,19 @@ class SmartBinGUI:
         self.root.after(1000, self._update_stats_display)  # Update every second
     
     def _update_session_stats(self, waste_type: str):
-        """Update session statistics when item is classified"""
+        """Update session statistics when item is classified (9-class system)"""
         try:
-            # Map waste type to bin index
-            type_to_bin = {
-                'plastic': 0,
-                'metal': 1, 
-                'paper': 2,
-                'misc': 3
+            # Map waste type to binary categories for persistent storage
+            recyclable_classes = {
+                'aluminium', 'carton', 'glass', 
+                'paper_and_cardboard', 'plastic'
             }
             
-            bin_id = type_to_bin.get(waste_type.lower(), 3)  # Default to misc
+            # Use binary mapping for legacy bin stats (0=recyclable, 1=non-recyclable)
+            if waste_type.lower() in recyclable_classes:
+                bin_id = 0  # Recyclable bin
+            else:
+                bin_id = 1  # Non-recyclable bin
             
             # Update bin stats
             self.bin_stats[bin_id]['count'] += 1
@@ -1459,10 +1595,10 @@ class SmartBinGUI:
             self.total_items_processed += 1
             self.system_stats['total_classifications'] += 1
             
-            # Simulate coin dispensing (would be controlled by ESP32 in real system)
-            if self.bin_stats[bin_id]['count'] % 3 == 0:  # Dispense coin every 3 items
+            # Simulate coin dispensing for recyclable items only
+            if waste_type.lower() in recyclable_classes:
                 self.system_stats['coins_dispensed'] += 1
-                self._add_message(f"[SYSTEM] 🪙 Coin dispensed! Total: {self.system_stats['coins_dispensed']}", "info")
+                self._add_message(f"[SYSTEM] 🪙 Coin dispensed for {waste_type}! Total: {self.system_stats['coins_dispensed']}", "info")
             
         except Exception as e:
             print(f"⚠️ Session stats update error: {e}")

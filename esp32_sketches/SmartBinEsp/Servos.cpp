@@ -15,7 +15,12 @@ int currentSlidingPosition = 90;  // Home position: 90 degrees
 // int currentDroppingPosition = 0;  // Removed - only using two motors now
 
 // Movement speed configuration (milliseconds per degree)
-const int MOVEMENT_SPEED_MS_PER_DEGREE = 10; // Adjust this value based on your servo speed
+// This controls actual movement speed by breaking large movements into 5-degree increments
+// Higher values = slower movement, lower values = faster movement
+// Each 5-degree step will take MOVEMENT_SPEED_MS_PER_DEGREE * 5 milliseconds
+// For steps < 5 degrees, delay is proportional: MOVEMENT_SPEED_MS_PER_DEGREE * actual_step
+// Current setting: 44ms per degree = ~4 seconds for 90° movement
+const int MOVEMENT_SPEED_MS_PER_DEGREE = 30; // 90° movement takes ~4 seconds
 
 void initServos() {
   Serial.println("[Servo] Initializing servo motors...");
@@ -62,23 +67,43 @@ void rotateCoinDispenser(int angle) {
   // Calculate displacement from current position
   int displacement = abs(angle - currentCoinPosition);
   
-  // Calculate proportional delay (minimum 50ms, maximum 2000ms)
-  int movementDelay = constrain(displacement * MOVEMENT_SPEED_MS_PER_DEGREE, 50, 2000);
+  if (displacement == 0) {
+    Serial.println("[Servo] CoinDispenser: Already at target position");
+    return;
+  }
   
-  Serial.println("[Servo] CoinDispenser: Movement delay = " + String(movementDelay) + "ms");
+  // Determine direction of movement
+  int direction = (angle > currentCoinPosition) ? 1 : -1;
   
-  // Send command to servo
-  coinServo.write(angle);
+  // Move in increments of 5 degrees (or less for final step)
+  int currentPos = currentCoinPosition;
   
-  // Wait for movement to complete with watchdog-safe delay
-  unsigned long startTime = millis();
-  while (millis() - startTime < movementDelay) {
-    yield(); // Prevent watchdog timeout
-    delay(10); // Small delay chunks
+  while (currentPos != angle) {
+    // Calculate next step (max 5 degrees)
+    int step = min(5, abs(angle - currentPos));
+    currentPos += direction * step;
+    
+    // Send incremental command to servo
+    coinServo.write(currentPos);
+    
+    // Calculate proportional delay for this step
+    int stepDelay = (step < 5) ? 
+                   (MOVEMENT_SPEED_MS_PER_DEGREE * step) : 
+                   (MOVEMENT_SPEED_MS_PER_DEGREE * 5);
+    
+    Serial.println("[Servo] CoinDispenser: Step to " + String(currentPos) + "° (+" + String(step) + "°), delay=" + String(stepDelay) + "ms");
+    
+    // Wait for this step to complete with watchdog-safe delay
+    unsigned long startTime = millis();
+    while (millis() - startTime < stepDelay) {
+      yield(); // Prevent watchdog timeout
+      delay(10); // Small delay chunks
+    }
   }
   
   // Update current position
   currentCoinPosition = angle;
+  Serial.println("[Servo] CoinDispenser: Movement complete to " + String(angle) + "°");
 }
 
 // rotateLid function removed - hardware no longer present
@@ -93,23 +118,43 @@ void rotateSlidingMotor(int angle) {
   // Calculate displacement from current position
   int displacement = abs(angle - currentSlidingPosition);
   
-  // Calculate proportional delay (minimum 50ms, maximum 2000ms)
-  int movementDelay = constrain(displacement * MOVEMENT_SPEED_MS_PER_DEGREE, 50, 2000);
+  if (displacement == 0) {
+    Serial.println("[Servo] SlidingMotor: Already at target position");
+    return;
+  }
   
-  Serial.println("[Servo] SlidingMotor: Movement delay = " + String(movementDelay) + "ms");
+  // Determine direction of movement
+  int direction = (angle > currentSlidingPosition) ? 1 : -1;
   
-  // Send command to servo
-  slidingServo.write(angle);
+  // Move in increments of 5 degrees (or less for final step)
+  int currentPos = currentSlidingPosition;
   
-  // Wait for movement to complete with watchdog-safe delay
-  unsigned long startTime = millis();
-  while (millis() - startTime < movementDelay) {
-    yield(); // Prevent watchdog timeout
-    delay(10); // Small delay chunks
+  while (currentPos != angle) {
+    // Calculate next step (max 5 degrees)
+    int step = min(5, abs(angle - currentPos));
+    currentPos += direction * step;
+    
+    // Send incremental command to servo
+    slidingServo.write(currentPos);
+    
+    // Calculate proportional delay for this step
+    int stepDelay = (step < 5) ? 
+                   (MOVEMENT_SPEED_MS_PER_DEGREE * step) : 
+                   (MOVEMENT_SPEED_MS_PER_DEGREE * 5);
+    
+    Serial.println("[Servo] SlidingMotor: Step to " + String(currentPos) + "° (+" + String(step) + "°), delay=" + String(stepDelay) + "ms");
+    
+    // Wait for this step to complete with watchdog-safe delay
+    unsigned long startTime = millis();
+    while (millis() - startTime < stepDelay) {
+      yield(); // Prevent watchdog timeout
+      delay(10); // Small delay chunks
+    }
   }
   
   // Update current position
   currentSlidingPosition = angle;
+  Serial.println("[Servo] SlidingMotor: Movement complete to " + String(angle) + "°");
 }
 
 // rotateDroppingMotor function removed - only using two motors now
