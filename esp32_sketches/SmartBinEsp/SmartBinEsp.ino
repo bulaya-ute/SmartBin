@@ -43,12 +43,12 @@ const int RELEASE_CLOSED = 0;
 */
 
 // New two-motor system constants
-const int SLIDING_HOME = 90;       // Sliding motor home position
-const int SLIDING_WASTE = 0;       // Waste bin position (paper/misc)
-const int SLIDING_RECYCLABLE = 180; // Recyclable bin position (metal/plastic)
+const int SLIDING_HOME = 90;           // Sliding motor home position
+const int SLIDING_RECYCLABLE = 30;     // Recyclable bin position (reduced angle)
+const int SLIDING_NON_RECYCLABLE = 150; // Non-recyclable bin position (reduced angle)
 
-const int COIN_HOME = 0;           // Coin dispenser home position
-const int COIN_DISPENSE = 100;     // Coin dispense position
+const int COIN_HOME = 90;             // Coin dispenser home position (changed from 0)
+const int COIN_DISPENSE = 0;          // Coin dispense position (changed from 100)
 
 // Distance threshold for object detection (in cm)
 const float DETECTION_THRESHOLD = 10.0f;
@@ -90,19 +90,19 @@ void setup() {
     
     // Test coin dispenser
     logMessage("[Servo Test] Testing coin dispenser movement");
-    Serial.println("[Debug] About to move coin dispenser to 50°");
-    rotateCoinDispenser(50);  // Move to middle position
+    logMessage("[Debug] About to move coin dispenser to 45°");
+    rotateCoinDispenser(45);  // Move to middle position
     delay(1000);
-    Serial.println("[Debug] About to move coin dispenser to 0°");
-    rotateCoinDispenser(0);   // Return to home
+    logMessage("[Debug] About to move coin dispenser to 90° (home)");
+    rotateCoinDispenser(90);   // Return to home
     delay(500);
     
     // Test sliding motor
     logMessage("[Servo Test] Testing sliding motor movement");
-    Serial.println("[Debug] About to move sliding motor to 45°");
-    rotateSlidingMotor(45);   // Move to test position
+    Serial.println("[Debug] About to move sliding motor to 60°");
+    rotateSlidingMotor(60);   // Move to test position
     delay(1000);
-    Serial.println("[Debug] About to move sliding motor to 90°");
+    logMessage("[Debug] About to move sliding motor to 90° (home)");
     rotateSlidingMotor(90);   // Return to home
     delay(500);
     
@@ -221,6 +221,56 @@ void loop() {
   // Update communication system
   comm.update();
   
+  // Handle Bluetooth commands (for manual control and testing)
+  if (SerialBT.available()) {
+    String command = SerialBT.readStringUntil('\n');
+    command.trim();
+    command.toLowerCase();
+    
+    if (command == "recyclable") {
+      SerialBT.println("[Command] Processing recyclable waste manually");
+      rotateCoinDispenser(COIN_DISPENSE);       // Dispense coin (0°)
+      delay(1000);
+      rotateCoinDispenser(COIN_HOME);           // Return to home (90°)
+      delay(500);
+      rotateSlidingMotor(SLIDING_RECYCLABLE);   // Move to recyclable position (30°)
+      delay(3000);
+      rotateSlidingMotor(SLIDING_HOME);         // Return to home (90°)
+      SerialBT.println("[Command] Recyclable processing complete");
+    }
+    else if (command == "non-recyclable") {
+      SerialBT.println("[Command] Processing non-recyclable waste manually");
+      rotateSlidingMotor(SLIDING_NON_RECYCLABLE);  // Move to non-recyclable position (150°)
+      delay(3000);
+      rotateSlidingMotor(SLIDING_HOME);            // Return to home (90°)
+      SerialBT.println("[Command] Non-recyclable processing complete");
+    }
+    else if (command == "test-servos") {
+      SerialBT.println("[Command] Testing servo motors");
+      // Test coin dispenser
+      rotateCoinDispenser(45);  // Test position
+      delay(1000);
+      rotateCoinDispenser(COIN_HOME);  // Return home
+      delay(500);
+      // Test sliding motor
+      rotateSlidingMotor(60);   // Test position
+      delay(1000);
+      rotateSlidingMotor(SLIDING_HOME);  // Return home
+      SerialBT.println("[Command] Servo test complete");
+    }
+    else if (command == "status") {
+      SerialBT.println("[Status] SmartBin System Status:");
+      SerialBT.println("- Laptop Connected: " + String(comm.isLaptopConnected() ? "Yes" : "No"));
+      SerialBT.println("- Processing: " + String(isProcessing ? "Yes" : "No"));
+      SerialBT.println("- Free Memory: " + String(ESP.getFreeHeap()) + " bytes");
+      SerialBT.println("- Motor Positions: Sliding=" + String(SLIDING_HOME) + "°, Coin=" + String(COIN_HOME) + "°");
+    }
+    else if (command != "") {
+      SerialBT.println("[Error] Unknown command: " + command);
+      SerialBT.println("Available commands: recyclable, non-recyclable, test-servos, status");
+    }
+  }
+  
   // Check available memory periodically
   static unsigned long lastMemCheck = 0;
   if (millis() - lastMemCheck > 10000) { // Every 10 seconds
@@ -278,30 +328,38 @@ void loop() {
       logMessage("[Processing] Extracted class '" + detectedClass + "' from result '" + originalResult + "'");
     }
 
-    // Step 3: Execute sorting based on classification result
+    // Step 3: Map detailed classification to binary for motors
     yield(); // Prevent watchdog timeout
     
-    if (detectedClass == "misc" || detectedClass == "paper") {
-      // Paper/Misc: Rotate sliding motor to 0° and hold
-      logMessage("[Sorting] Paper/Misc detected - routing to waste bin");
-      rotateSlidingMotor(0);  // Move to waste position
-      delay(3000);  // Hold for 3 seconds
-      rotateSlidingMotor(90); // Return to home position
-    } 
-    else if (detectedClass == "metal" || detectedClass == "plastic") {
-      // Metal/Plastic: Dispense coin, then route to recyclable bin
-      logMessage("[Sorting] Recyclable material detected - dispensing coin and routing to recyclable bin");
+    // Map 9-class classification to binary recyclable/non-recyclable
+    bool isRecyclable = false;
+    if (detectedClass == "aluminium" || detectedClass == "carton" || 
+        detectedClass == "glass" || detectedClass == "paper_and_cardboard" || 
+        detectedClass == "plastic") {
+      isRecyclable = true;
+    }
+    
+    if (isRecyclable) {
+      // Recyclable: Dispense coin, then route to recyclable bin
+      logMessage("[Sorting] Recyclable material detected (" + detectedClass + ") - dispensing coin and routing to recyclable bin");
       
       // First: Dispense coin
-      rotateCoinDispenser(100);  // Dispense coin
+      rotateCoinDispenser(COIN_DISPENSE);  // Move to dispense position (0°)
       delay(1000);  // Hold dispense position
-      rotateCoinDispenser(0);    // Return to home
+      rotateCoinDispenser(COIN_HOME);      // Return to home (90°)
       delay(500);   // Brief pause
       
       // Then: Route to recyclable bin
-      rotateSlidingMotor(180);   // Move to recyclable position  
-      delay(3000);  // Hold for 3 seconds
-      rotateSlidingMotor(90);    // Return to home position
+      rotateSlidingMotor(SLIDING_RECYCLABLE);   // Move to recyclable position (30°)
+      delay(3000);  // Hold for 3 seconds to allow waste to fall
+      rotateSlidingMotor(SLIDING_HOME);         // Return to home position (90°)
+    }
+    else {
+      // Non-recyclable: Route to non-recyclable bin (no coin)
+      logMessage("[Sorting] Non-recyclable material detected (" + detectedClass + ") - routing to non-recyclable bin");
+      rotateSlidingMotor(SLIDING_NON_RECYCLABLE);  // Move to non-recyclable position (150°)
+      delay(3000);  // Hold for 3 seconds to allow waste to fall
+      rotateSlidingMotor(SLIDING_HOME);            // Return to home position (90°)
     }
 
     logMessage("[Cycle Complete] Sorted '" + detectedClass + "' - motors returned to home.");

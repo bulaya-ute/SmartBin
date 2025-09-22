@@ -8,8 +8,9 @@ from ultralytics import YOLO
 
 def main():
     print("🚀 Starting YOLO Classification Training")
-    print("📁 Dataset: ./dataset")
-    print("🎯 Classes: metal, misc, paper, plastic")
+    print("📁 Dataset: ./larger_dataset")
+    print("🎯 Classes: aluminium, carton, e_waste, glass, organic_waste, paper_and_cardboard, plastic, textile, wood")
+    print("♻️ Target: Binary classification (recyclable vs non-recyclable)")
     print("=" * 50)
     
     # Load pretrained YOLO11 classification model
@@ -17,17 +18,17 @@ def main():
     
     # Train the model
     results = model.train(
-        data='./dataset',     # path to dataset
-        epochs=5,           # number of epochs
-        # imgsz=224,           # image size
-        # batch=8,             # smaller batch for CPU
-        device='cpu',        # use CPU
-        # project='runs',      # save results to runs/
-        # name='smartbin_classify'  # experiment name
+        data='./larger_dataset',  # path to new dataset
+        epochs=10,                # increased epochs for more classes
+        imgsz=224,               # image size
+        batch=16,                # batch size
+        device='cpu',            # use CPU (change to 'cuda' if you have GPU)
+        project='runs',          # save results to runs/
+        name='smartbin_9class'   # experiment name
     )
     
     print("✅ Training completed!")
-    print(f"📊 Best model saved to: runs/smartbin_classify/weights/best.pt")
+    print(f"📊 Best model saved to: runs/smartbin_9class/weights/best.pt")
     
     # Validate the model
     print("\n🧪 Validating model...")
@@ -40,6 +41,7 @@ def main():
     model.export(format='onnx')  # Export to ONNX for deployment
     
     print("\n✅ All done! Model ready for integration.")
+    print("💡 Remember: GUI will show specific class, ESP32 gets recyclable/non-recyclable")
 
 if __name__ == "__main__":
     main()

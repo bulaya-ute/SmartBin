@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SmartBin Flutter Layout Mockup</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f5f5f5;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .app-bar {
+            background: #2196F3;
+            color: white;
+            padding: 16px;
+            text-align: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 10px;
+            gap: 0;
+        }
+
+        .top-section {
+            height: 400px; /* This should be resizable */
+            display: flex;
+            gap: 0;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .image-section {
+            width: 300px; /* This should be resizable */
+            background: #e3f2fd;
+            border-right: 1px solid #ddd;
+            padding: 16px;
+            position: relative;
+        }
+
+        .vertical-splitter {
+            width: 8px;
+            background: #e0e0e0;
+            cursor: col-resize;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .vertical-splitter:hover {
+            background: #2196F3;
+            opacity: 0.3;
+        }
+
+        .vertical-splitter::after {
+            content: '';
+            width: 3px;
+            height: 40px;
+            background: #666;
+            border-radius: 2px;
+        }
+
+        .classification-section {
+            width: 250px; /* This should be resizable */
+            background: #f3e5f5;
+            padding: 16px;
+            position: relative;
+        }
+
+        .bin-status-section {
+            flex: 1; /* Takes remaining space */
+            background: #fff3e0;
+            padding: 16px;
+        }
+
+        .horizontal-splitter {
+            height: 8px;
+            background: #e0e0e0;
+            cursor: row-resize;
+            margin: 0 10px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        .horizontal-splitter:hover {
+            background: #2196F3;
+            opacity: 0.3;
+        }
+
+        .horizontal-splitter::after {
+            content: '';
+            width: 40px;
+            height: 3px;
+            background: #666;
+            border-radius: 2px;
+        }
+
+        .message-section {
+            flex: 1; /* Takes remaining space after top section */
+            background: white;
+            margin: 0 10px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            padding: 16px;
+            overflow: hidden;
+        }
+
+        .control-section {
+            background: #f8f9fa;
+            border-top: 1px solid #ddd;
+            padding: 16px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .section-header {
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .bin-status-item {
+            height: 60px; /* FIXED HEIGHT - not aspect ratio! */
+            background: #f0f8ff;
+            border: 1px solid #4CAF50;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            padding: 8px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .bin-icon {
+            width: 24px;
+            height: 24px;
+            background: #4CAF50;
+            border-radius: 50%;
+        }
+
+        .bin-progress {
+            flex: 1;
+        }
+
+        .bin-count {
+            font-weight: bold;
+            color: #4CAF50;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 4px;
+            background: #e0e0e0;
+            border-radius: 2px;
+            overflow: hidden;
+            margin-top: 4px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: #4CAF50;
+            width: 30%; /* Example fill */
+        }
+
+        .connection-status {
+            background: #d4edda;
+            color: #155724;
+            padding: 6px 12px;
+            border-radius: 16px;
+            border: 1px solid #c3e6cb;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .connect-btn {
+            background: #2196F3;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .image-placeholder {
+            width: 100%;
+            height: 200px;
+            background: #f0f0f0;
+            border: 2px dashed #ccc;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #666;
+            margin-top: 12px;
+        }
+
+        .classification-result {
+            background: #f0f8ff;
+            border: 1px solid #2196F3;
+            border-radius: 8px;
+            padding: 12px;
+            margin-top: 12px;
+        }
+
+        .confidence-score {
+            font-size: 14px;
+            color: #666;
+            margin-top: 4px;
+        }
+
+        .message-log {
+            background: #f8f9fa;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            height: 200px;
+            padding: 8px;
+            overflow-y: auto;
+            margin-top: 12px;
+        }
+
+        .annotation {
+            position: absolute;
+            background: rgba(255, 193, 7, 0.9);
+            color: #333;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+            pointer-events: none;
+        }
+
+        .resizable-annotation {
+            top: 10px;
+            right: 10px;
+        }
+
+        .fixed-height-annotation {
+            bottom: 10px;
+            right: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-bar">
+        📱 SmartBin Control
+    </div>
+
+    <div class="main-content">
+        <!-- TOP SECTION (Resizable Height) -->
+        <div class="top-section">
+            <!-- Image Section (Resizable Width) -->
+            <div class="image-section">
+                <div class="annotation resizable-annotation">Resizable Width →</div>
+                <div class="section-header">
+                    📷 Last Captured Image
+                </div>
+                <div class="image-placeholder">
+                    No image captured yet
+                </div>
+            </div>
+
+            <!-- First Vertical Splitter -->
+            <div class="vertical-splitter"></div>
+
+            <!-- Classification Section (Resizable Width) -->
+            <div class="classification-section">
+                <div class="annotation resizable-annotation">Resizable Width →</div>
+                <div class="section-header">
+                    🧠 Classification Results
+                </div>
+                <div class="classification-result">
+                    <strong>PLASTIC</strong>
+                    <div class="confidence-score">Confidence: 94.2%</div>
+                </div>
+            </div>
+
+            <!-- Second Vertical Splitter -->
+            <div class="vertical-splitter"></div>
+
+            <!-- Bin Status Section (Takes remaining space) -->
+            <div class="bin-status-section">
+                <div class="annotation fixed-height-annotation">Fixed Row Heights!</div>
+                <div class="section-header">
+                    🗂️ Bin Status
+                </div>
+                
+                <!-- FIXED HEIGHT ROWS (60px each) -->
+                <div class="bin-status-item">
+                    <div class="bin-icon"></div>
+                    <div class="bin-progress">
+                        <div><strong>PLASTIC</strong></div>
+                        <div class="progress-bar">
+                            <div class="progress-fill"></div>
+                        </div>
+                    </div>
+                    <div class="bin-count">3/10</div>
+                </div>
+
+                <div class="bin-status-item">
+                    <div class="bin-icon"></div>
+                    <div class="bin-progress">
+                        <div><strong>METAL</strong></div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: 10%;"></div>
+                        </div>
+                    </div>
+                    <div class="bin-count">1/10</div>
+                </div>
+
+                <div class="bin-status-item">
+                    <div class="bin-icon"></div>
+                    <div class="bin-progress">
+                        <div><strong>PAPER</strong></div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: 50%;"></div>
+                        </div>
+                    </div>
+                    <div class="bin-count">5/10</div>
+                </div>
+
+                <div class="bin-status-item">
+                    <div class="bin-icon"></div>
+                    <div class="bin-progress">
+                        <div><strong>COINS</strong></div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: 70%; background: #ff9800;"></div>
+                        </div>
+                    </div>
+                    <div class="bin-count">7/10</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- HORIZONTAL SPLITTER (Always visible with handle) -->
+        <div class="horizontal-splitter"></div>
+
+        <!-- MESSAGE SECTION (Takes remaining space) -->
+        <div class="message-section">
+            <div class="section-header">
+                💬 Communication Log
+            </div>
+            <div class="message-log">
+                [14:23:45] → Connecting to SmartBin...<br>
+                [14:23:47] ← Device connected successfully<br>
+                [14:24:02] ← Image captured: 1024x768<br>
+                [14:24:03] ← Classification: plastic (94.2%)<br>
+                [14:24:04] → Opening plastic bin...<br>
+                [14:24:05] ← Bin opened successfully<br>
+            </div>
+        </div>
+    </div>
+
+    <!-- BOTTOM CONTROL SECTION -->
+    <div class="control-section">
+        <div class="connection-status">🟢 Connected</div>
+        <button class="connect-btn">Disconnect</button>
+    </div>
+</body>
+</html>

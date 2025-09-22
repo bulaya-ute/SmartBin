@@ -748,7 +748,7 @@ class SmartBinGUI:
                         venv_python = ".venv/bin/python"
                         cmd = [
                             venv_python, "yolo_classification_backend.py",
-                            "--model", "runs/smartbin_classify2/weights/best.pt",
+                            "--model", "runs/smartbin_9class/weights/best.pt",
                             "--image", tmp_path,
                             "--json"
                         ]
