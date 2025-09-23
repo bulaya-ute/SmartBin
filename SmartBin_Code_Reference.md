@@ -3,8 +3,25 @@
 ## 📋 Table of Contents
 1. [ESP32 Motor Control](#esp32-motor-control)
 2. [ESP32 Classification Logic](#esp32-classification-logic)
-3. [ESP32 Bluetooth Commands](#esp32-bluetooth-commands)
-4. [GUI Classification Processing](#gui-classification-processing)
+3. [ESP32 Bluetooth Commands](#esp32-bluetooth-comm# Binary classification mapping
+recyclable_classes = {
+    'aluminium', 'plastic', 'paper_and_cardboard'
+}
+
+# Determine if item is recyclable
+if classification.lower() in recyclable_classes:
+    binary_result = "recyclable"
+else:
+    binary_result = "non-recyclable"
+
+# Send binary classification result to ESP32
+esp32_command = f"{binary_result} {confidence:.2f}"
+if self._send_message("CLS01", esp32_command):
+    self.gui.message_queue.put({
+        'type': 'info',
+        'message': f"✅ Sent to ESP32: {esp32_command} (from {classification})",
+        'timestamp': datetime.now().strftime("%H:%M:%S")
+    })fication Processing](#gui-classification-processing)
 5. [GUI Binary Mapping](#gui-binary-mapping)
 6. [GUI Bin Visualization](#gui-bin-visualization)
 7. [Configuration Constants](#configuration-constants)

@@ -333,8 +333,14 @@ void loop() {
     
     // Map 9-class classification to binary recyclable/non-recyclable
     bool isRecyclable = false;
-    if (detectedClass == "aluminium" || detectedClass == "carton" || 
-        detectedClass == "glass" || detectedClass == "paper_and_cardboard" || 
+    if (detectedClass == "aluminium" || 
+        detectedClass == "recyclable" ||
+        detectedClass == "metal" ||
+        detectedClass == "paper" ||
+        detectedClass == "cardboard" ||
+        detectedClass == "carton" || 
+        detectedClass == "glass" || 
+        detectedClass == "paper_and_cardboard" || 
         detectedClass == "plastic") {
       isRecyclable = true;
     }

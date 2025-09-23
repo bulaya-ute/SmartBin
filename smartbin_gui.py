@@ -14,14 +14,18 @@ import base64
 import io
 import json
 import os
+import re
 from datetime import datetime, timedelta
 from PIL import Image, ImageTk
-from typing import Optional, Dict, Any, Tuple
-import serial
+from typing import Optional, Dict, Any
 import subprocess
 
 # Import our existing protocol
 from smartbin_pyserial_protocol import SmartBinPySerialProtocol
+
+
+recyclable_classes = {'plastic', 'glass', 'carton', "aluminium", "metal"}
+
 
 class SmartBinGUI:
     def __init__(self):
@@ -220,19 +224,15 @@ class SmartBinGUI:
         self.bin_grid = ctk.CTkFrame(self.bin_status_frame)
         self.bin_grid.pack(fill="both", expand=True, padx=10, pady=(0, 10))
         
-        # Initialize bin counts for 9-class system with binary mapping
+        # Initialize bin counts for actual model classes
         self.bin_counts = {
-            # Recyclable materials
-            "aluminium": 0,
-            "carton": 0,
-            "glass": 0,
-            "paper_and_cardboard": 0,
+            # Recyclable materials (based on actual model classes)
             "plastic": 0,
-            # Non-recyclable materials  
-            "ewaste": 0,
-            "organic_waste": 0,
+            "glass": 0,
+            "carton": 0,
+            # Non-recyclable materials (based on actual model classes)
             "textile": 0,
-            "wood": 0
+            "e_waste": 0
         }
         self.bin_capacity = 10
         self.coin_count = 7
@@ -244,19 +244,16 @@ class SmartBinGUI:
         """Create the bin and coin visualizations for 9-class system"""
         # Recyclable bin info
         recyclable_info = {
-            "aluminium": {"emoji": "🥤", "color": "#C0C0C0"},
-            "carton": {"emoji": "📦", "color": "#8D6E63"},
-            "glass": {"emoji": "🍾", "color": "#4CAF50"}, 
-            "paper_and_cardboard": {"emoji": "📄", "color": "#FF9800"},
-            "plastic": {"emoji": "🥤", "color": "#2196F3"}
+            "plastic": {"emoji": "🥤", "color": "#2196F3"},
+            "glass": {"emoji": "🍾", "color": "#4CAF50"},
+            "carton": {"emoji": "📦", "color": "#FF9800"}
         }
         
         # Non-recyclable bin info
         non_recyclable_info = {
-            "ewaste": {"emoji": "💻", "color": "#9C27B0"},
-            "organic_waste": {"emoji": "🍎", "color": "#795548"},
+            "e_waste": {"emoji": "💻", "color": "#9C27B0"},
             "textile": {"emoji": "�", "color": "#E91E63"},
-            "wood": {"emoji": "🪵", "color": "#6D4C41"}
+
         }
         
         # Create recyclable section
@@ -513,97 +510,7 @@ class SmartBinGUI:
             width=80
         )
         self.send_btn.pack(side="left", padx=(0, 10))
-        
-        # Quick commands - organized by category
-        
-        # Hardware control commands frame
-        hardware_frame = ctk.CTkFrame(self.command_frame)
-        hardware_frame.pack(fill="x", pady=(10, 5))
-        
-        hardware_label = ctk.CTkLabel(hardware_frame, text="🔧 Hardware Control", font=ctk.CTkFont(weight="bold"))
-        hardware_label.pack(pady=(5, 5))
-        
-        # Row 1: Basic commands
-        basic_frame = ctk.CTkFrame(hardware_frame)
-        basic_frame.pack(fill="x", padx=5, pady=2)
-        
-        basic_commands = [
-            ("🤝 Send Hello", "RTC00"),
-            ("📷 Request Image", "IMG01"),
-            ("🔄 Status", "STA01")
-        ]
-        
-        for text, cmd in basic_commands:
-            btn = ctk.CTkButton(
-                basic_frame,
-                text=text,
-                command=lambda c=cmd: self._send_quick_command(c),
-                width=100
-            )
-            btn.pack(side="left", padx=2, pady=2)
-        
-        # Row 2: Lid control
-        lid_frame = ctk.CTkFrame(hardware_frame)
-        lid_frame.pack(fill="x", padx=5, pady=2)
-        
-        lid_commands = [
-            ("🔓 Open Lid", "LID00 open"),
-            ("🔒 Close Lid", "LID00 close"),
-            ("❓ Lid Status", "LID00 status"),
-            ("🤖 Auto Lid", "LID00 auto"),
-            ("✋ Manual Lid", "LID00 manual")
-        ]
-        
-        for text, cmd in lid_commands:
-            btn = ctk.CTkButton(
-                lid_frame,
-                text=text,
-                command=lambda c=cmd: self._send_quick_command(c),
-                width=100
-            )
-            btn.pack(side="left", padx=2, pady=2)
-        
-        # Row 3: Coin dispenser
-        coin_frame = ctk.CTkFrame(hardware_frame)
-        coin_frame.pack(fill="x", padx=5, pady=2)
-        
-        coin_commands = [
-            ("🪙 Dispense Coin", "COIN0 dispense"),
-            ("🪙💰 Dispense 3", "COIN0 dispense --count 3"),
-            ("📊 Coin Status", "COIN0 status"),
-            ("🔧 Test Dispenser", "COIN0 test")
-        ]
-        
-        for text, cmd in coin_commands:
-            btn = ctk.CTkButton(
-                coin_frame,
-                text=text,
-                command=lambda c=cmd: self._send_quick_command(c),
-                width=100
-            )
-            btn.pack(side="left", padx=2, pady=2)
-        
-        # Row 4: Buzzer control
-        buzzer_frame = ctk.CTkFrame(hardware_frame)
-        buzzer_frame.pack(fill="x", padx=5, pady=2)
-        
-        buzzer_commands = [
-            ("🔊 Startup Sound", "BUZZ0 startup"),
-            ("📦 Item Detected", "BUZZ0 detected"),
-            ("✅ Sort Complete", "BUZZ0 complete"),
-            ("🚨 Error Sound", "BUZZ0 error"),
-            ("🔇 Buzzer Off", "BUZZ0 off")
-        ]
-        
-        for text, cmd in buzzer_commands:
-            btn = ctk.CTkButton(
-                buzzer_frame,
-                text=text,
-                command=lambda c=cmd: self._send_quick_command(c),
-                width=100
-            )
-            btn.pack(side="left", padx=2, pady=2)
-    
+
     def _setup_protocol_integration(self):
         """Setup integration with the PySerial protocol"""
         # Create a custom protocol class that sends messages to GUI
@@ -766,11 +673,10 @@ class SmartBinGUI:
                             'timestamp': datetime.now().strftime("%H:%M:%S")
                         })
                         
-                        # Map 9-class classification to binary for ESP32
-                        recyclable_classes = {
-                            'aluminium', 'carton', 'glass', 
-                            'paper_and_cardboard', 'plastic'
-                        }
+                        # # Map classification to binary for ESP32
+                        # recyclable_classes = {
+                        #     'plastic', 'glass', 'carton'
+                        # }
                         
                         # Determine if item is recyclable
                         if classification.lower() in recyclable_classes:
@@ -818,11 +724,13 @@ class SmartBinGUI:
                     self.expected_parts = 0
             
             def _classify_with_yolo_backend(self, image: Image.Image) -> Dict[str, Any]:
-                """Classify image using the YOLO backend script"""
+                """Classify image using official Ultralytics YOLO command"""
                 try:
                     import subprocess
                     import tempfile
                     import os
+                    import json
+                    import re
                     
                     # Save image to temporary file
                     with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as tmp_file:
@@ -830,49 +738,66 @@ class SmartBinGUI:
                         tmp_path = tmp_file.name
                     
                     try:
-                        # Call the YOLO backend script with virtual environment python
-                        venv_python = ".venv/bin/python"
+                        # Use official ultralytics YOLO command
+                        model_path = "runs/smartbin_9class/weights/best.pt"
+                        
+                        # Activate virtual environment and run YOLO command
                         cmd = [
-                            venv_python, "yolo_classification_backend.py",
-                            "--model", "runs/smartbin_9class/weights/best.pt",
-                            "--image", tmp_path,
-                            "--json"
+                            "bash", "-c", 
+                            f"source .venv/bin/activate && yolo classify predict model={model_path} source={tmp_path} save=false show=false"
                         ]
                         
                         self.gui.message_queue.put({
                             'type': 'info',
-                            'message': f"🔄 Running YOLO classification: {' '.join(cmd)}",
+                            'message': f"🔄 Running official YOLO classification on {tmp_path}",
                             'timestamp': datetime.now().strftime("%H:%M:%S")
                         })
                         
-                        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+                        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30, cwd=".")
+                        
+                        print(f"\n🔍 YOLO Command Debug:")
+                        print(f"Command: {' '.join(cmd)}")
+                        print(f"Return code: {result.returncode}")
+                        print(f"STDOUT:\n{result.stdout}")
+                        print(f"STDERR:\n{result.stderr}")
                         
                         if result.returncode == 0:
-                            # Parse JSON result
-                            import json
-                            if result.stdout.strip():  # Check if output is not empty
+                            # Parse YOLO output to extract classification results
+                            stdout_text = result.stdout
+                            
+                            # Look for the classification results in the output
+                            # YOLO typically outputs something like: "class_name: confidence"
+                            classification_results = self._parse_yolo_output(stdout_text)
+                            
+                            if classification_results["success"]:
                                 self.gui.message_queue.put({
                                     'type': 'info',
-                                    'message': f"✅ YOLO backend output received: {len(result.stdout)} characters",
+                                    'message': f"✅ YOLO classification successful: {classification_results['result']}",
                                     'timestamp': datetime.now().strftime("%H:%M:%S")
                                 })
-                                classification_data = json.loads(result.stdout)
-                                return classification_data
+                                return classification_results
                             else:
+                                self.gui.message_queue.put({
+                                    'type': 'error',
+                                    'message': f"❌ Failed to parse YOLO output",
+                                    'timestamp': datetime.now().strftime("%H:%M:%S")
+                                })
                                 return {
                                     "success": False,
-                                    "error": "Backend script returned empty output"
+                                    "error": "Failed to parse YOLO classification output",
+                                    "raw_output": stdout_text
                                 }
                         else:
-                            error_msg = f"Backend script error (exit code {result.returncode}): {result.stderr}"
+                            error_msg = f"YOLO command failed (exit code {result.returncode}): {result.stderr}"
                             self.gui.message_queue.put({
                                 'type': 'error',
-                                'message': f"❌ YOLO backend failed: {error_msg}",
+                                'message': f"❌ YOLO command failed: {error_msg}",
                                 'timestamp': datetime.now().strftime("%H:%M:%S")
                             })
                             return {
                                 "success": False,
-                                "error": error_msg
+                                "error": error_msg,
+                                "raw_output": result.stdout
                             }
                     
                     finally:
@@ -885,7 +810,84 @@ class SmartBinGUI:
                 except Exception as e:
                     return {
                         "success": False,
-                        "error": f"YOLO backend integration error: {e}"
+                        "error": f"YOLO command integration error: {e}"
+                    }
+            
+            def _parse_yolo_output(self, output_text: str) -> Dict[str, Any]:
+                """Parse YOLO classification output"""
+                try:
+                    # Initialize default values
+                    all_confidences = {}
+                    top_class = None
+                    top_confidence = 0.0
+                    
+                    print(f"\n🔍 Parsing YOLO output:")
+                    print(f"Raw output: {repr(output_text)}")
+                    
+                    # Look for the classification line with confidences
+                    # Format: "image 1/1 /path/image.jpg: 224x224 class1 0.97, class2 0.02, class3 0.00, ..."
+                    lines = output_text.split('\n')
+                    
+                    for line in lines:
+                        line = line.strip()
+                        print(f"Processing line: {repr(line)}")
+                        
+                        # Look for the line containing classification results
+                        if "image 1/1" in line and ".jpg:" in line:
+                            # Extract the part after the image dimensions
+                            # Find the pattern: "224x224 class1 0.97, class2 0.02, ..."
+                            dimension_match = re.search(r'\d+x\d+\s+(.+?)(?:\d+\.\d+ms|\s*$)', line)
+                            if dimension_match:
+                                results_part = dimension_match.group(1).strip()
+                                print(f"Found results part: {repr(results_part)}")
+                                
+                                # Parse class confidence pairs
+                                # Pattern: "class_name confidence, class_name confidence, ..."
+                                class_conf_pattern = r'([a-zA-Z_]+)\s+([0-9.]+)'
+                                matches = re.findall(class_conf_pattern, results_part)
+                                
+                                print(f"Found matches: {matches}")
+                                
+                                for class_name, conf_str in matches:
+                                    try:
+                                        confidence = float(conf_str)
+                                        all_confidences[class_name] = confidence
+                                        
+                                        if confidence > top_confidence:
+                                            top_confidence = confidence
+                                            top_class = class_name
+                                            
+                                        print(f"Parsed: {class_name} = {confidence}")
+                                    except ValueError as e:
+                                        print(f"Failed to parse confidence '{conf_str}': {e}")
+                                        continue
+                    
+                    print(f"Final results:")
+                    print(f"  Top class: {top_class}")
+                    print(f"  Top confidence: {top_confidence}")
+                    print(f"  All confidences: {all_confidences}")
+                    
+                    if top_class and all_confidences:
+                        return {
+                            "success": True,
+                            "result": top_class,
+                            "confidence": top_confidence,
+                            "all_confidences": all_confidences
+                        }
+                    else:
+                        print(f"⚠️ No valid classification results found")
+                        return {
+                            "success": False,
+                            "error": "No valid classification results found in YOLO output",
+                            "raw_output": output_text
+                        }
+                        
+                except Exception as e:
+                    print(f"❌ Exception in _parse_yolo_output: {e}")
+                    return {
+                        "success": False,
+                        "error": f"Failed to parse YOLO output: {e}",
+                        "raw_output": output_text
                     }
         
         self.protocol_class = GUIProtocol
@@ -1052,11 +1054,10 @@ class SmartBinGUI:
             if count_label:
                 count_label.configure(text=f"{self.bin_counts[classified_item]}")
             
-            # Check if item is recyclable for coin dispensing
-            recyclable_classes = {
-                'aluminium', 'carton', 'glass', 
-                'paper_and_cardboard', 'plastic'
-            }
+            # # Check if item is recyclable for coin dispensing
+            # recyclable_classes = {
+            #     'plastic', 'glass', 'carton'
+            # }
             
             if classified_item.lower() in recyclable_classes:
                 # Simulate coin dispensing (decrease coin count)
@@ -1082,10 +1083,9 @@ class SmartBinGUI:
                     count_label.configure(text=f"{count}")
             
             # Update coin display (simulate based on recyclable items processed)
-            recyclable_classes = {
-                'aluminium', 'carton', 'glass', 
-                'paper_and_cardboard', 'plastic'
-            }
+            # recyclable_classes = {
+            #     'plastic', 'glass', 'carton'
+            # }
             recyclable_count = sum(self.bin_counts[cls] for cls in recyclable_classes if cls in self.bin_counts)
             coins_used = min(recyclable_count, self.coin_capacity)  # 1 coin per recyclable item
             self.coin_count = max(0, self.coin_capacity - coins_used)
@@ -1168,10 +1168,9 @@ class SmartBinGUI:
                 print(f"  ✅ All model classes are recognized by the system")
             
             # Binary mapping info
-            recyclable_classes = {
-                'aluminium', 'carton', 'glass', 
-                'paper_and_cardboard', 'plastic'
-            }
+            # recyclable_classes = {
+            #     'plastic', 'glass', 'carton', "aluminium"
+            # }
             binary_result = "RECYCLABLE" if result.lower() in recyclable_classes else "NON-RECYCLABLE"
             print(f"  🔄 Binary Mapping: {result} → {binary_result}")
             print(f"{'='*60}\n")
@@ -1464,21 +1463,6 @@ class SmartBinGUI:
         except Exception as e:
             self._add_message(f"[GUI] ❌ ERROR: {e}", "error")
     
-    def _send_quick_command(self, command: str):
-        """Send a quick command"""
-        if not self.protocol or not self.running:
-            self._add_message("[GUI] ❌ ERROR: Not connected to ESP32", "error")
-            return
-        
-        try:
-            parts = command.split(' ', 1)
-            code = parts[0]
-            content = parts[1] if len(parts) > 1 else ""
-            
-            self.protocol._send_message(code, content)
-        except Exception as e:
-            self._add_message(f"[GUI] ❌ ERROR: {e}", "error")
-    
     def _clear_message_log(self):
         """Clear the message log"""
         self.message_log.config(state=tk.NORMAL)
@@ -1576,10 +1560,9 @@ class SmartBinGUI:
         """Update session statistics when item is classified (9-class system)"""
         try:
             # Map waste type to binary categories for persistent storage
-            recyclable_classes = {
-                'aluminium', 'carton', 'glass', 
-                'paper_and_cardboard', 'plastic'
-            }
+            # recyclable_classes = {
+            #     'plastic', 'glass', 'carton'
+            # }
             
             # Use binary mapping for legacy bin stats (0=recyclable, 1=non-recyclable)
             if waste_type.lower() in recyclable_classes:
