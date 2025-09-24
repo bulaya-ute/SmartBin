@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:smartbin_flutter/modules/classification_module.dart';
 import 'package:smartbin_flutter/screens/home_screen.dart';
 import 'package:smartbin_flutter/screens/initialization_screen.dart';
 import 'package:smartbin_flutter/themes.dart';
@@ -50,10 +51,10 @@ class StartupEntry extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final steps = <InitStep>[
+      InitStep(description: 'Loading assets', weight: 1.0, action: _preloadAssets),
+      InitStep(description: 'Initializing classification module', weight: 3.0, action: Classification.init),
       InitStep(description: 'Loading configuration', weight: 1.0, action: _loadConfig),
       InitStep(description: 'Initializing Bluetooth', weight: 2.0, action: _initBluetooth),
-      InitStep(description: 'Preloading assets', weight: 1.0, action: _preloadAssets),
-      InitStep(description: 'Warming up model', weight: 3.0, action: _warmupModel),
     ];
 
     return InitializationScreen(
