@@ -3,40 +3,45 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/cupertino.dart';
 
-
 /// Responsible for communication with python backend, which is used for
 /// running classification model and bluetooth communication
 class Engine {
   static bool _isInitialized = false;
   static String outputBuffer = "";
   static Process? process;
-  static String classifierScript = "lib/scripts/classifier.py";
+  static String engineScript = "lib/scripts/engine.py";
 
-  bool get isInitialized {
+  static bool get isInitialized {
     if (!_isInitialized) {
+      return false;
+    } else if (process == null) {
       return false;
     }
     return true;
   }
 
-  set isInitialized(bool value) {
+  static set isInitialized(bool value) {
     _isInitialized = value;
   }
 
-  Future<void> init() async {
-    process = await Process.start('python', [classifierScript, "start"]);
+  /// Initialization method. Establishes communication with the python API
+  static Future<void> init() async {
+    if (isInitialized) {
+      print("Initialization cancelled. Module is already initialized");
+    }
+    
+    process = await Process.start('python', [engineScript, "start"]);
 
     String? response = await waitForResponse(Duration(seconds: 30));
     print("Response: $response");
     if (response?.toLowerCase() == "ready") {
       isInitialized = true;
-      print("Initialization complete");
+      print("Initialization success");
     } else {
       isInitialized = false;
+      print("Error: Initialization failed. Ready status not received from backend");
     }
-
   }
-
 
   /// Waits for a non-empty response from the Python process within the specified timeout.
   static Future<String?> waitForResponse(Duration timeout) async {
@@ -60,10 +65,10 @@ class Engine {
     return await completer.future;
   }
 
-
-    static Future<String?> sendCommand(String command, Duration timeout) async {
-    if (!isInitialized || process == null) {
-      print("Error: Not initialized. Call start() first.");
+  /// Send a command to the engine
+  static Future<String?> sendCommand(String command, {Duration timeout = const Duration(seconds: 2)}) async {
+    if (!isInitialized) { // Fixed: should be !isInitialized
+      print("Error: Engine not initialized.");
       return null;
     }
 
@@ -78,10 +83,7 @@ class Engine {
       return null;
     }
   }
-
-
   static void print(String message) {
     debugPrint("[ENGINE] $message");
   }
-
 }
