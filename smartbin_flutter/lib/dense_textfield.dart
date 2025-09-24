@@ -42,6 +42,7 @@ class DenseTextField extends StatelessWidget {
       isDense: true,
       contentPadding: EdgeInsets.all(5),
       border: OutlineInputBorder(),
+
     );
 
     final merged = _mergeDecoration(base, decoration);
@@ -59,7 +60,9 @@ class DenseTextField extends StatelessWidget {
       minLines: minLines,
       maxLines: maxLines,
       readOnly: readOnly,
-      style: style,
+      style: TextStyle(
+        fontFamily: "JetBrainsMono"
+      ),
     );
   }
 

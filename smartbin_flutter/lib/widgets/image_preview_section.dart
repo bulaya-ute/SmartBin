@@ -46,14 +46,20 @@ class ImagePreviewSection extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const SectionHeader(icon: '📷', title: 'Last Captured Image'),
+                    // const Text(
+                    //   'Last Captured Image',
+                    //   style: TextStyle(fontSize: 18),
+                    // ),
                     const SizedBox(height: 12),
                     Expanded(
                       child: Container(
-                        width: double.infinity,
+                        // width: double.infinity,
                         decoration: BoxDecoration(
                           color: const Color(0xFFF0F0F0),
-                          border: Border.all(color: const Color(0xFFCCCCCC), width: 2),
+                          border: Border.all(
+                            color: const Color(0xFFCCCCCC),
+                            width: 2,
+                          ),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Center(
@@ -81,14 +87,14 @@ class ImagePreviewSection extends StatelessWidget {
                     // Row 2: detected text
                     Text(
                       detectedText,
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodyMedium
-                          ?.copyWith(fontWeight: FontWeight.w600),
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ],
                 ),
               ),
+
               const SizedBox(width: 12),
               // Right: classification list
               SizedBox(
@@ -96,9 +102,21 @@ class ImagePreviewSection extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const SectionHeader(icon: '🧠', title: 'Classification Results'),
+                    const Text(
+                      'Classification Results',
+                      style: TextStyle(fontSize: 18),
+                    ),
                     const SizedBox(height: 12),
-                    ...classifications.map((e) => _classificationChip(e)).toList(),
+                    SingleChildScrollView(
+                      child: Column(
+                        children: [
+                          ...classifications.map(
+                                (e) => _classificationChip(e, context),
+                          ),
+
+                        ],
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -109,31 +127,34 @@ class ImagePreviewSection extends StatelessWidget {
     );
   }
 
-  Widget _classificationChip(ClassificationEntry entry) {
+  Widget _classificationChip(ClassificationEntry entry, BuildContext context) {
+
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
-        color: const Color(0xFFF0F8FF), // light azure
-        border: Border.all(color: const Color(0xFF2196F3)),
+        color: Color.alphaBlend(
+          Theme.of(context).colorScheme.surface.withAlpha(128),
+          Theme.of(context).cardTheme.color!,
+        ), // light azure
+        border: Border.all(color: Colors.grey.withAlpha(25)),
         borderRadius: BorderRadius.circular(8),
       ),
       padding: const EdgeInsets.all(12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        // mainAxisSize: MainAxisSize.min,
         children: [
           Text(
             entry.label.toUpperCase(),
-            style: const TextStyle(fontWeight: FontWeight.bold),
+            // style: const TextStyle(fontWeight: FontWeight.bold),
           ),
-          const SizedBox(height: 4),
+          // const SizedBox(height: 4),
           Text(
-            'Confidence: ${entry.value}',
-            style: const TextStyle(fontSize: 14, color: Color(0xFF666666)),
+            entry.value,
+            // style: const TextStyle(fontSize: 14, color: Color(0xFF666666)),
           ),
         ],
       ),
     );
   }
 }
-

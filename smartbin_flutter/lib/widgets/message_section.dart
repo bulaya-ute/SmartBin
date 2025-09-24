@@ -26,21 +26,17 @@ class MessageSection extends StatelessWidget {
           children: [
             Row(
               children: [
-                const SectionHeader(icon: '💬', title: 'Communication Log'),
+                const Text('Communication Log', style: TextStyle(
+                  fontSize: 20
+                ),),
                 const Spacer(),
-                Checkbox(
-                  value: autoscroll,
-                  onChanged: onToggleAutoscroll,
-                ),
+                Checkbox(value: autoscroll, onChanged: onToggleAutoscroll),
                 const Text(
                   'Autoscroll',
                   style: TextStyle(fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(width: 20),
-                ElevatedButton(
-                  onPressed: onClear,
-                  child: const Text('Clear'),
-                ),
+                ElevatedButton(onPressed: onClear, child: const Text('Clear')),
               ],
             ),
             const SizedBox(height: 8),
@@ -50,13 +46,20 @@ class MessageSection extends StatelessWidget {
                   itemCount: messages.length,
                   itemBuilder: (context, index) {
                     final msg = messages[index];
-                    final color = msg.color ?? Theme.of(context).colorScheme.onSurface;
+                    final color =
+                        msg.color ?? Theme.of(context).colorScheme.onSurface;
                     return Padding(
                       padding: const EdgeInsets.symmetric(
                         vertical: 2.0,
                         horizontal: 8.0,
                       ),
-                      child: Text(msg.text, style: TextStyle(color: color)),
+                      child: Text(
+                        msg.text,
+                        style: TextStyle(
+                          color: color,
+                          fontFamily: "JetBrainsMono",
+                        ),
+                      ),
                     );
                   },
                 ),
@@ -68,4 +71,3 @@ class MessageSection extends StatelessWidget {
     );
   }
 }
-

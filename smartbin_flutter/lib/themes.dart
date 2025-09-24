@@ -54,11 +54,9 @@ const _darkColorScheme = ColorScheme(
   onError: Color(0xFF690005),
   errorContainer: Color(0xFF93000A),
   onErrorContainer: Color(0xFFFFB4AB),
-  background: Color(0xFF1A1C1E),
-  onBackground: Color(0xFFE2E2E6),
   surface: Color(0xFF1A1C1E), // Main surface color for dark theme
   onSurface: Color(0xFFE2E2E6),
-  surfaceVariant: Color(0xFF43474E), // Will be used for card background
+  surfaceContainerHighest: Color(0xFF23282d), // Will be used for card background
   onSurfaceVariant: Color(0xFFC3C7CF),
   outline: Color(0xFF8D9199),
   outlineVariant: Color(0xFF43474E),
@@ -72,7 +70,7 @@ const _darkColorScheme = ColorScheme(
 
 // Card Theme for Light Mode
 final _lightCardTheme = CardThemeData(
-  color: _lightColorScheme.surfaceVariant, // MODIFIED: Explicitly set card color
+  color: _lightColorScheme.surfaceContainerHighest, // MODIFIED: Explicitly set card color
   elevation: 8.0,
   shadowColor: Color(0x40000000),
   margin: EdgeInsets.symmetric(horizontal: 12.0, vertical: 6.0),
@@ -87,7 +85,7 @@ final _lightCardTheme = CardThemeData(
 
 // Card Theme for Dark Mode
 final _darkCardTheme = CardThemeData(
-  color: _darkColorScheme.surfaceVariant, // MODIFIED: Explicitly set card color
+  color: _darkColorScheme.surfaceContainerHighest, // MODIFIED: Explicitly set card color
   elevation: 10.0,
   shadowColor: Color(0x50000000),
   margin: EdgeInsets.symmetric(horizontal: 12.0, vertical: 6.0),
