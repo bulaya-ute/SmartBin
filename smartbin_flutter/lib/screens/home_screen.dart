@@ -1,9 +1,15 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
+import 'dart:convert';
 
 import '../models/log_message.dart';
 import '../widgets/bottom_controls.dart';
 import '../widgets/message_section.dart';
 import '../widgets/top_section.dart';
+import '../widgets/custom_app_bar.dart';
+import '../modules/bluetooth.dart';
+import '../modules/engine.dart';
+import '../modules/classification.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -34,36 +40,201 @@ class _HomeScreenState extends State<HomeScreen> {
   bool autoscroll = true;
   bool autoReconnect = true;
 
-  final List<LogMessage> _messages = [
-    const LogMessage(text: '[14:23:45] → Connecting to SmartBin...'),
-    const LogMessage(text: '[14:23:47] ← Device connected successfully'),
-    const LogMessage(text: '[14:24:02] ← Image captured: 1024x768'),
-    const LogMessage(text: '[14:24:03] ← Classification: plastic (94.2%)'),
-    const LogMessage(text: '[14:24:04] → Opening plastic bin...'),
-    const LogMessage(text: '[14:24:05] ← Bin opened successfully'),
-  ];
+  // Real data from backend
+  List<String> _detectionClasses = [];
+  Map<String, dynamic>? _classificationResult;
+  Timer? _bufferReadTimer;
+
+  final List<LogMessage> _messages = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeModules();
+    _startBufferReading();
+  }
 
   @override
   void dispose() {
     _macCtl.dispose();
+    _bufferReadTimer?.cancel();
     super.dispose();
+  }
+
+  Future<void> _initializeModules() async {
+    try {
+      // Initialize engine first
+      await Engine.init();
+
+      // Initialize classification module
+      await Classification.init();
+
+      // Get available classes
+      await _loadDetectionClasses();
+
+    } catch (e) {
+      _addLogMessage('Error initializing modules: $e', Colors.red);
+    }
+  }
+
+  Future<void> _loadDetectionClasses() async {
+    try {
+      String? response = await Engine.sendCommand('classification get-classes');
+      if (response != null) {
+        // Parse JSON response
+        final List<dynamic> classes = jsonDecode(response);
+        setState(() {
+          _detectionClasses = classes.cast<String>();
+        });
+        _addLogMessage('Loaded ${_detectionClasses.length} detection classes', Colors.blue);
+      }
+    } catch (e) {
+      _addLogMessage('Error loading detection classes: $e', Colors.red);
+    }
+  }
+
+  void _startBufferReading() {
+    _bufferReadTimer = Timer.periodic(Duration(milliseconds: 500), (timer) async {
+      if (_connected) {
+        try {
+          String? buffer = await Bluetooth.readBuffer();
+          if (buffer != null && buffer.isNotEmpty) {
+            // Split multiple messages
+            final messages = buffer.split('\n').where((msg) => msg.trim().isNotEmpty);
+            for (String message in messages) {
+              _processReceivedMessage(message.trim());
+            }
+          }
+        } catch (e) {
+          // Silently handle buffer read errors to avoid spam
+        }
+      }
+    });
+  }
+
+  void _processReceivedMessage(String message) {
+    Color messageColor = Colors.grey;
+
+    // Format PA/PX messages in yellow
+    if (message.startsWith('PA') || message.startsWith('PX')) {
+      messageColor = Colors.yellow;
+      _addLogMessage('← $message', messageColor);
+    } else if (message.startsWith('ERROR:')) {
+      messageColor = Colors.red;
+      _addLogMessage('← $message', messageColor);
+    } else if (message.startsWith('IMAGE_RECEIVED:')) {
+      messageColor = Colors.green;
+      _addLogMessage('← Image received from ESP32', messageColor);
+      // Extract image path and potentially trigger classification
+      final imagePath = message.substring('IMAGE_RECEIVED:'.length).trim();
+      _triggerClassification(imagePath);
+    } else {
+      _addLogMessage('← $message', messageColor);
+    }
+  }
+
+  Future<void> _triggerClassification(String imagePath) async {
+    try {
+      _addLogMessage('→ Classifying image: $imagePath', Colors.blue);
+      String? response = await Engine.sendCommand('classify $imagePath');
+      if (response != null) {
+        final result = jsonDecode(response);
+        setState(() {
+          _classificationResult = result;
+        });
+
+        // Find the class with highest confidence
+        if (result is Map<String, dynamic>) {
+          String topClass = '';
+          double maxConfidence = 0.0;
+
+          result.forEach((className, confidence) {
+            if (confidence is num && confidence > maxConfidence) {
+              maxConfidence = confidence.toDouble();
+              topClass = className;
+            }
+          });
+
+          _addLogMessage('← Classification: $topClass (${(maxConfidence * 100).toStringAsFixed(1)}%)', Colors.green);
+        }
+      }
+    } catch (e) {
+      _addLogMessage('Error during classification: $e', Colors.red);
+    }
+  }
+
+  void _addLogMessage(String text, [Color? color]) {
+    if (mounted) {
+      setState(() {
+        _messages.add(LogMessage(
+          text: '[${DateTime.now().toString().substring(11, 19)}] $text',
+          color: color,
+        ));
+      });
+    }
+  }
+
+  Future<void> _toggleConnection() async {
+    if (_connected) {
+      // Disconnect
+      try {
+        await Engine.sendCommand('bluetooth disconnect');
+        setState(() {
+          _connected = false;
+        });
+        _addLogMessage('Disconnected from SmartBin', Colors.orange);
+      } catch (e) {
+        _addLogMessage('Error disconnecting: $e', Colors.red);
+      }
+    } else {
+      // Connect
+      try {
+        _addLogMessage('→ Connecting to SmartBin...', Colors.blue);
+        await Bluetooth.connect(macAddress: _macCtl.text);
+        setState(() {
+          _connected = true;
+        });
+        _addLogMessage('← Device connected successfully', Colors.green);
+      } catch (e) {
+        _addLogMessage('Connection failed: $e', Colors.red);
+      }
+    }
+  }
+
+  Future<void> _sendCommand(String command) async {
+    try {
+      _addLogMessage('→ $command', Colors.green);
+
+      if (command.toLowerCase().startsWith('bluetooth send')) {
+        // Extract message part and use transmitMessage
+        final message = command.substring('bluetooth send'.length).trim();
+        await Bluetooth.transmitMessage(message: message);
+      } else {
+        // Send other commands directly to engine
+        String? response = await Engine.sendCommand(command);
+        if (response != null && response.isNotEmpty) {
+          _addLogMessage('← $response', Colors.grey);
+        }
+      }
+    } catch (e) {
+      _addLogMessage('Error sending command: $e', Colors.red);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('📱 SmartBin Control'), elevation: 2),
+      appBar: CustomAppBar(
+        connected: _connected,
+        onConnectionTap: _toggleConnection,
+      ),
       bottomNavigationBar: BottomControls(
         connected: _connected,
-        onToggleConnect: () => setState(() => _connected = !_connected),
+        onToggleConnect: _toggleConnection,
         autoReconnect: autoReconnect,
         onToggleAutoReconnect: (v) => setState(() => autoReconnect = v),
         macController: _macCtl,
-        onSendCommand: (cmd) {
-          setState(() {
-            _messages.add(LogMessage(text: '→ $cmd', color: Colors.green));
-          });
-        },
+        onSendCommand: _sendCommand,
       ),
       body: LayoutBuilder(
         builder: (context, constraints) {
@@ -93,6 +264,9 @@ class _HomeScreenState extends State<HomeScreen> {
                     minRightWidth: _minRightWidth,
                     splitterThickness: _splitterThickness,
                     onLeftRatioChanged: (r) => setState(() => _leftRatio = r),
+                    // Pass real data to TopSection
+                    detectionClasses: _detectionClasses,
+                    classificationResult: _classificationResult,
                   ),
                 ),
 

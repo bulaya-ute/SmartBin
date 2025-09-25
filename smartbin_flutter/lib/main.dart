@@ -36,8 +36,8 @@ class StartupEntry extends StatelessWidget {
     final steps = <InitStep>[
       InitStep(description: 'Loading config', weight: 1.0, action: Config.init),
       InitStep(description: 'Starting engine', weight: 1.0, action: Engine.init),
-      InitStep(description: 'Initializing classification module', weight: 1.0, action: Classification.init),
       InitStep(description: 'Initializing bluetooth protocol module', weight: 1.0, action: Bluetooth.init),
+      InitStep(description: 'Initializing classification module', weight: 1.0, action: Classification.init),
     ];
 
     return InitializationScreen(

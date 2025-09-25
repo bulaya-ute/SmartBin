@@ -82,6 +82,12 @@ def handle_bluetooth_disconnect():
     # Error messages are already printed by the module
 
 
+def handle_classification_get_classes():
+    """Handle classification get-classes command"""
+    classes = ClassificationModule.get_classes()
+    print(json.dumps(classes))
+
+
 def main():
     # Check if the script is called with "start" argument
     if len(sys.argv) != 2 or sys.argv[1] != "start":
@@ -153,6 +159,10 @@ def main():
             # Handle bluetooth disconnect command
             elif user_input == 'bluetooth disconnect':
                 handle_bluetooth_disconnect()
+
+            # Handle classification get-classes command
+            elif user_input == 'classification get-classes':
+                handle_classification_get_classes()
 
             else:
                 # Unknown command

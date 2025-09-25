@@ -2,6 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:smartbin_flutter/widgets/section_header.dart';
 
 class StatusSection extends StatefulWidget {
+  final int initialRecyclable;
+  final int initialNonRecyclable;
+  final int initialCoins;
+  final Map<String, int>? initialDetectionCounts;
+
   const StatusSection({
     super.key,
     this.initialRecyclable = 0,
@@ -9,11 +14,6 @@ class StatusSection extends StatefulWidget {
     this.initialCoins = 0,
     this.initialDetectionCounts,
   });
-
-  final int initialRecyclable;
-  final int initialNonRecyclable;
-  final int initialCoins;
-  final Map<String, int>? initialDetectionCounts;
 
   @override
   State<StatusSection> createState() => _StatusSectionState();
@@ -23,13 +23,16 @@ class _StatusSectionState extends State<StatusSection> {
   late int _recyclable = widget.initialRecyclable;
   late int _nonRecyclable = widget.initialNonRecyclable;
   late int _coins = widget.initialCoins;
-  late Map<String, int> _detectionCounts = Map.of(widget.initialDetectionCounts ?? const {
-    'Plastic': 0,
-    'Glass': 0,
-    'Carton': 0,
-    'Textile': 0,
-    'E-waste': 0,
-  });
+  late Map<String, int> _detectionCounts = Map.of(
+    widget.initialDetectionCounts ??
+        const {
+          'Plastic': 0,
+          'Glass': 0,
+          'Carton': 0,
+          'Textile': 0,
+          'E-waste': 0,
+        },
+  );
 
   Future<void> _setValueDialog({
     required String title,
@@ -48,7 +51,8 @@ class _StatusSectionState extends State<StatusSection> {
             labelText: 'Enter value',
             border: OutlineInputBorder(),
           ),
-          onSubmitted: (_) => Navigator.of(ctx).pop(int.tryParse(controller.text)),
+          onSubmitted: (_) =>
+              Navigator.of(ctx).pop(int.tryParse(controller.text)),
         ),
         actions: [
           TextButton(
@@ -56,7 +60,8 @@ class _StatusSectionState extends State<StatusSection> {
             child: const Text('Cancel'),
           ),
           ElevatedButton(
-            onPressed: () => Navigator.of(ctx).pop(int.tryParse(controller.text)),
+            onPressed: () =>
+                Navigator.of(ctx).pop(int.tryParse(controller.text)),
             child: const Text('Set'),
           ),
         ],
@@ -85,10 +90,7 @@ class _StatusSectionState extends State<StatusSection> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              header,
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
+            Text(header, style: const TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 12),
             Row(
               children: [
@@ -100,15 +102,9 @@ class _StatusSectionState extends State<StatusSection> {
                   ),
                 ),
                 const Spacer(),
-                OutlinedButton(
-                  onPressed: onReset,
-                  child: const Text('Reset'),
-                ),
+                OutlinedButton(onPressed: onReset, child: const Text('Reset')),
                 const SizedBox(width: 8),
-                ElevatedButton(
-                  onPressed: onSet,
-                  child: const Text('Set'),
-                ),
+                ElevatedButton(onPressed: onSet, child: const Text('Set')),
               ],
             ),
           ],
@@ -126,14 +122,14 @@ class _StatusSectionState extends State<StatusSection> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                label,
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
+              Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
               Text(
                 '$value',
-                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ],
           ),
@@ -151,10 +147,7 @@ class _StatusSectionState extends State<StatusSection> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Match the style/icon of Classification Results header
-            const Text(
-              '🧠 Bin Status',
-              style: TextStyle(fontSize: 18),
-            ),
+            const Text('🧠 Bin Status', style: TextStyle(fontSize: 18)),
             const SizedBox(height: 12),
             Row(
               children: [
@@ -199,10 +192,7 @@ class _StatusSectionState extends State<StatusSection> {
               ],
             ),
             const SizedBox(height: 16),
-            const Text(
-              '📊 Detection Counts',
-              style: TextStyle(fontSize: 18),
-            ),
+            const Text('📊 Detection Counts', style: TextStyle(fontSize: 18)),
 
             const SizedBox(height: 12),
             Wrap(

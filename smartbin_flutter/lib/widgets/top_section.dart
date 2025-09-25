@@ -3,13 +3,15 @@ import 'package:smartbin_flutter/widgets/image_preview_section.dart';
 import 'package:smartbin_flutter/widgets/status_section.dart';
 
 class TopSection extends StatelessWidget {
-  const TopSection({
+  TopSection({
     super.key,
     required this.leftRatio,
     required this.minLeftWidth,
     required this.minRightWidth,
     required this.splitterThickness,
     required this.onLeftRatioChanged,
+    required this.detectionClasses,
+    required this.classificationResult,
   });
 
   final double leftRatio; // fraction of available width for left panel
@@ -17,19 +19,22 @@ class TopSection extends StatelessWidget {
   final double minRightWidth;
   final double splitterThickness;
   final ValueChanged<double> onLeftRatioChanged;
+  List<String> detectionClasses;
+Map<String, dynamic>? classificationResult;
 
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
         final totalWidth = constraints.maxWidth;
-        final availableWidth = (totalWidth - splitterThickness).clamp(0, double.infinity);
+        final availableWidth = (totalWidth - splitterThickness).clamp(
+          0,
+          double.infinity,
+        );
 
         // If very small, avoid division by zero and fallback
         if (availableWidth <= 0) {
-          return Row(
-            children: const [Expanded(child: SizedBox()),],
-          );
+          return Row(children: const [Expanded(child: SizedBox())]);
         }
 
         final minLeftRatio = (minLeftWidth / availableWidth).clamp(0.0, 1.0);
@@ -38,8 +43,15 @@ class TopSection extends StatelessWidget {
 
         // Clamp incoming ratio to ensure both sides respect min widths
         final clampedLeftRatio = leftRatio.clamp(minLeftRatio, maxLeftRatio);
-        final leftWidth = (availableWidth * clampedLeftRatio).clamp(minLeftWidth, availableWidth - minRightWidth);
+        final leftWidth = (availableWidth * clampedLeftRatio).clamp(
+          minLeftWidth,
+          availableWidth - minRightWidth,
+        );
 
+        Map<String, int> detectionCounts = {};
+        for (String detectionClass in detectionClasses) {
+          detectionCounts[detectionClass] = 0;
+        }
         return Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -54,8 +66,10 @@ class TopSection extends StatelessWidget {
                 child: GestureDetector(
                   behavior: HitTestBehavior.opaque,
                   onHorizontalDragUpdate: (details) {
-                    final newLeftWidth = (leftWidth + details.delta.dx)
-                        .clamp(minLeftWidth, availableWidth - minRightWidth);
+                    final newLeftWidth = (leftWidth + details.delta.dx).clamp(
+                      minLeftWidth,
+                      availableWidth - minRightWidth,
+                    );
                     final newRatio = newLeftWidth / availableWidth;
                     onLeftRatioChanged(newRatio);
                   },
@@ -77,7 +91,7 @@ class TopSection extends StatelessWidget {
             ),
 
             // Right: Status section grows to fill remaining space
-            const Expanded(child: StatusSection()),
+            Expanded(child: StatusSection(initialDetectionCounts: detectionCounts,)),
           ],
         );
       },

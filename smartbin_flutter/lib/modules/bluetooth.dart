@@ -6,7 +6,7 @@ class Bluetooth extends BaseModule{
   static bool _isInitialized = false;
 
   static bool get isInitialized {
-    if (!_isInitialized || rfcommBinding == null) {
+    if (!_isInitialized) {
       return false;
     }
     return true;
@@ -32,22 +32,7 @@ class Bluetooth extends BaseModule{
       command += " $sudoPassword";
     }
 
-    // String? rfcommBindingResponse = await Engine.sendCommand(command, timeout: Duration(seconds: 10));
-    // if (rfcommBindingResponse == null) {
-    //   error("RFCOMM binding response not received");
-    // }
-    // else if (rfcommBindingResponse.toLowerCase().startsWith("info: rfcomm bound to ")) {
-    //   rfcommBinding = rfcommBindingResponse.substring("info: rfcomm bound to ".length, rfcommBindingResponse.length).trim();
-    //   print("RFCOMM bound to $rfcommBinding");
-    // }
-    // else if (rfcommBindingResponse.toLowerCase().startsWith("error:")) {
-    //   throw Exception("Initialization failed: $rfcommBindingResponse");
-    // }
-    // else {
-    //   error("Unexpected response: $rfcommBindingResponse");
-    // }
-
-    String? successResponse = await Engine.sendCommand("bluetooth init");
+    String? successResponse = await Engine.sendCommand(command);
     if (successResponse == null) {
       error("Initialization failed. Null success message received");
     }
@@ -147,7 +132,7 @@ class Bluetooth extends BaseModule{
   }
 
   static void error(String description, {bool throwError = true}) {
-    debugPrint("[CLASSIFICATION ⚠️] $description");
+    debugPrint("[BLUETOOTH ⚠️] $description");
     if (throwError) throw Exception(description);
   }
 
