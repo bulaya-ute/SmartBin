@@ -15,8 +15,10 @@ import io
 from PIL import Image
 from typing import Tuple
 
+
 class SmartBinPySerialProtocol:
-    def __init__(self, esp32_mac: str = "EC:E3:34:15:F2:62", rfcomm_device: str = "/dev/rfcomm0", baudrate: int = 115200):
+    def __init__(self, esp32_mac: str = "EC:E3:34:15:F2:62", rfcomm_device: str = "/dev/rfcomm0",
+                 baudrate: int = 115200):
         self.esp32_mac = esp32_mac
         self.rfcomm_device = rfcomm_device
         self.baudrate = baudrate
@@ -57,7 +59,8 @@ class SmartBinPySerialProtocol:
                 subprocess.run(["sudo", "rfcomm", "release", "0"], capture_output=True, text=True, timeout=5)
             except Exception:
                 pass
-            res = subprocess.run(["sudo", "rfcomm", "bind", "0", self.esp32_mac, "1"], capture_output=True, text=True, timeout=10)
+            res = subprocess.run(["sudo", "rfcomm", "bind", "0", self.esp32_mac, "1"], capture_output=True, text=True,
+                                 timeout=10)
             if res.returncode != 0:
                 print(f"❌ Failed to bind RFCOMM: {res.stderr}")
                 return False
@@ -90,7 +93,8 @@ class SmartBinPySerialProtocol:
                 parity=serial.PARITY_NONE,
                 stopbits=serial.STOPBITS_ONE,
             )
-            self.ser.flushInput(); self.ser.flushOutput()
+            self.ser.flushInput();
+            self.ser.flushOutput()
             print("✅ Serial open")
             return True
         except Exception as e:
@@ -223,6 +227,7 @@ class SmartBinPySerialProtocol:
             self.image_parts = {}
             self.expected_parts = 0
 
+
 if __name__ == '__main__':
     p = SmartBinPySerialProtocol()
     try:
@@ -231,4 +236,3 @@ if __name__ == '__main__':
         print("\n🛑 Shutting down...")
     finally:
         p.stop()
-
