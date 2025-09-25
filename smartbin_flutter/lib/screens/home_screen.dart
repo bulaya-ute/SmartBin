@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:smartbin_flutter/modules/config.dart';
 import 'dart:async';
 import 'dart:convert';
 
@@ -61,7 +62,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    _initializeModules();
+    initializeHome();
     _startBufferReading();
   }
 
@@ -72,19 +73,13 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
-  Future<void> _initializeModules() async {
+  Future<void> initializeHome() async {
     try {
-      // Initialize engine first
-      await Engine.init();
-
-      // Initialize classification module
-      await Classification.init();
-
       // Get available classes
       await _loadDetectionClasses();
 
     } catch (e) {
-      _addLogMessage('Error initializing modules: $e', Colors.red);
+      _addLogMessage('Error getting classes modules: $e', Colors.red);
     }
   }
 
@@ -185,6 +180,36 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  // Show a dialog to prompt the user for the sudo password
+  static Future<String?> _promptForPassword(BuildContext context) async {
+    final controller = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Enter Sudo Password'),
+          content: TextField(
+            controller: controller,
+            obscureText: true,
+            decoration: const InputDecoration(labelText: 'Sudo Password'),
+            autofocus: true,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(context).pop(controller.text),
+              child: const Text('OK'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   Future<void> _toggleConnection() async {
     if (isConnected) {
       // Disconnect
@@ -203,6 +228,7 @@ class _HomeScreenState extends State<HomeScreen> {
     } else if (isDisconnected) {
       // Connect
       try {
+
         setState(() {
           _connectionState = ConnectionState.connecting;
         });

@@ -31,54 +31,26 @@ class Security extends BaseModule {
         isInitialized = false;
       }
     }
-    // Prompt user for password if not available or decryption failed
-    final password = await _promptForPassword(context);
-    if (password != null && password.isNotEmpty) {
-      final encrypted = _encryptPassword(password, key);
-      await prefs.setString(_passwordKey, encrypted);
-      _sudoPassword = password;
-      isInitialized = true;
-    } else {
-      isInitialized = false;
-    }
+
+    // // Prompt user for password if not available or decryption failed
+    // final password = await _promptForPassword(context);
+    // if (password != null && password.isNotEmpty) {
+    //   final encrypted = _encryptPassword(password, key);
+    //   await prefs.setString(_passwordKey, encrypted);
+    //   _sudoPassword = password;
+    //   isInitialized = true;
+    // } else {
+    //   isInitialized = false;
+    // }
   }
 
-  // Show a dialog to prompt the user for the sudo password
-  static Future<String?> _promptForPassword(BuildContext context) async {
-    final controller = TextEditingController();
-    return showDialog<String>(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Enter Sudo Password'),
-          content: TextField(
-            controller: controller,
-            obscureText: true,
-            decoration: const InputDecoration(labelText: 'Sudo Password'),
-            autofocus: true,
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.of(context).pop(controller.text),
-              child: const Text('OK'),
-            ),
-          ],
-        );
-      },
-    );
-  }
 
   // Encrypt the password using the generated key
   static String _encryptPassword(String password, encrypt.Key key) {
     final iv = encrypt.IV.fromLength(16);
     final encrypter = encrypt.Encrypter(encrypt.AES(key));
     final encrypted = encrypter.encrypt(password, iv: iv);
-    return base64Encode(iv.bytes) + ':' + encrypted.base64;
+    return '${base64Encode(iv.bytes)}:${encrypted.base64}';
   }
 
   // Decrypt the password using the generated key

@@ -5,7 +5,7 @@ class Config extends BaseModule {
   static String moduleName = "CONFIG";
   static bool isInitialized = false;
 
-  static String? sudoPasswordEncrypt;
+  static String? sudoPassword;
 
   /// Initialization
   static Future<void> init() async {

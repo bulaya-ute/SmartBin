@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart' hide ConnectionState;
 import 'package:smartbin_flutter/dense_textfield.dart';
+import 'package:smartbin_flutter/modules/config.dart';
 import '../screens/home_screen.dart';
 
 class BottomControls extends StatefulWidget {
@@ -41,18 +42,51 @@ class _BottomControlsState extends State<BottomControls> {
       case ConnectionState.connecting:
         return 'Connecting...';
       case ConnectionState.disconnected:
-      default:
-        return 'Connect';
+      return 'Connect';
     }
   }
 
-  bool _isConnectButtonEnabled() {
+  bool _isConnectButtonEnabled()  {
+    // if (Config.sudoPassword == null) {
+    //   Config.sudoPassword = await _promptForPassword(context);
+    // }
     return widget.connectionState != ConnectionState.connecting;
   }
 
   bool _areCommandControlsEnabled() {
     return widget.connectionState == ConnectionState.connected;
   }
+
+  // Show a dialog to prompt the user for the sudo password
+  static Future<String?> _promptForPassword(BuildContext context) async {
+    final controller = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Enter Sudo Password'),
+          content: TextField(
+            controller: controller,
+            obscureText: true,
+            decoration: const InputDecoration(labelText: 'Sudo Password'),
+            autofocus: true,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(context).pop(controller.text),
+              child: const Text('OK'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
 
   @override
   void dispose() {

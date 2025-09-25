@@ -43,7 +43,7 @@ class Bluetooth extends BaseModule {
     }
   }
 
-  static Future<void> connect({String macAddress = "EC:E3:34:15:F2:62"}) async {
+  static Future<void> connect({String macAddress = "EC:E3:34:15:F2:62", String? sudoPassword}) async {
     if (!isInitialized) {
       error("Cannot connect: Bluetooth module not initialized");
       return;
