@@ -35,9 +35,9 @@ def handle_classification_init():
     # Error messages are already printed by the module
 
 
-def handle_bluetooth_init():
-    """Initialize bluetooth module"""
-    success = BluetoothModule.init()
+def handle_bluetooth_init(sudo_password: str = None):
+    """Initialize bluetooth module with optional sudo password"""
+    success = BluetoothModule.init(sudo_password)
     if success:
         print("success")
     # Error messages are already printed by the module
@@ -66,6 +66,22 @@ def handle_classify(image_path: str):
         print(json.dumps({"error": "Classification failed"}))
 
 
+def handle_bluetooth_connect(mac_address: str = None):
+    """Handle bluetooth connect command"""
+    success = BluetoothModule.connect(mac_address)
+    if success:
+        print("success")
+    # Error messages are already printed by the module
+
+
+def handle_bluetooth_disconnect():
+    """Handle bluetooth disconnect command"""
+    success = BluetoothModule.disconnect()
+    if success:
+        print("success")
+    # Error messages are already printed by the module
+
+
 def main():
     # Check if the script is called with "start" argument
     if len(sys.argv) != 2 or sys.argv[1] != "start":
@@ -92,8 +108,11 @@ def main():
                 handle_classification_init()
 
             # Handle bluetooth init command
-            elif user_input == 'bluetooth init':
-                handle_bluetooth_init()
+            elif user_input.startswith('bluetooth init'):
+                # Check if password is provided
+                parts = user_input.split(' ', 2)
+                sudo_password = parts[2] if len(parts) >= 3 else None
+                handle_bluetooth_init(sudo_password)
 
             # Handle bluetooth send command
             elif user_input.startswith('bluetooth send '):
@@ -122,6 +141,18 @@ def main():
                     continue
 
                 handle_classify(image_path)
+
+            # Handle bluetooth connect command
+            elif user_input.startswith('bluetooth connect '):
+                mac_address = user_input[17:].strip()  # Everything after "bluetooth connect "
+                if not mac_address:
+                    print("Error: No MAC address provided")
+                else:
+                    handle_bluetooth_connect(mac_address)
+
+            # Handle bluetooth disconnect command
+            elif user_input == 'bluetooth disconnect':
+                handle_bluetooth_disconnect()
 
             else:
                 # Unknown command

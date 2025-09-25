@@ -18,6 +18,7 @@ class BluetoothModule:
     _rfcomm_bound = False
     _reader_thread = None
     _buffer = []
+    _sudo_password = None
 
     # Configuration
     _esp32_mac = "EC:E3:34:15:F2:62"
@@ -36,8 +37,8 @@ class BluetoothModule:
         return BluetoothModule._initialized
 
     @staticmethod
-    def init() -> bool:
-        """Initialize bluetooth module"""
+    def init(sudo_password: str = None) -> bool:
+        """Initialize bluetooth module (setup prerequisites only)"""
         if BluetoothModule._initialized:
             print("Bluetooth module already initialized")
             return True
@@ -47,82 +48,78 @@ class BluetoothModule:
             global serial
             import serial
 
-            print("Initializing bluetooth module...")
+            # Store sudo password for later use
+            BluetoothModule._sudo_password = sudo_password
+
+            BluetoothModule._initialized = True
+            print("Success")
+            return True
+
+        except Exception as e:
+            print(f"Error: {e}")
+            return False
+
+    @staticmethod
+    def connect(mac_address: str = None) -> bool:
+        """Connect to ESP32 via bluetooth"""
+        if not BluetoothModule._initialized:
+            print("Error: Bluetooth module not initialized")
+            return False
+
+        if BluetoothModule._connected:
+            print("Already connected to ESP32")
+            return True
+
+        # Use provided mac address or default
+        target_mac = mac_address if mac_address else BluetoothModule._esp32_mac
+
+        try:
+            print(f"Connecting to ESP32 at {target_mac}...")
 
             # Setup RFCOMM binding
-            if not BluetoothModule._setup_rfcomm_binding():
+            if not BluetoothModule._setup_rfcomm_binding(target_mac, BluetoothModule._sudo_password):
                 print("Error: Failed to setup RFCOMM binding")
                 return False
 
             # Setup serial connection
             if not BluetoothModule._setup_serial():
                 print("Error: Failed to setup serial connection")
-                BluetoothModule._cleanup_rfcomm_binding()
+                BluetoothModule._cleanup_rfcomm_binding(BluetoothModule._sudo_password)
                 return False
 
             # Start the communication
             BluetoothModule._running = True
             BluetoothModule._start_reader_thread()
 
-            BluetoothModule._initialized = True
+            BluetoothModule._connected = True
+            print("Successfully connected to ESP32")
             return True
 
         except Exception as e:
-            print(f"Error initializing bluetooth: {e}")
-            BluetoothModule._cleanup()
+            print(f"Error connecting to ESP32: {e}")
+            BluetoothModule._cleanup_connection()
             return False
 
     @staticmethod
-    def send_message(message: str) -> bool:
-        """Send message via bluetooth"""
-        if not BluetoothModule._initialized:
-            print("Error: Bluetooth not initialized")
-            return False
+    def disconnect() -> bool:
+        """Disconnect from ESP32"""
+        if not BluetoothModule._connected:
+            print("Not connected to ESP32")
+            return True
 
         try:
-            # Send the message directly (not as protocol message)
-            if BluetoothModule._ser and BluetoothModule._ser.is_open:
-                BluetoothModule._ser.write((message + "\n").encode("utf-8"))
-                BluetoothModule._ser.flush()
-                print(f"📤 Sent: {message}")
-                return True
-            else:
-                print("Error: Serial connection not available")
-                return False
+            print("Disconnecting from ESP32...")
+            BluetoothModule._cleanup_connection()
+            print("Successfully disconnected from ESP32")
+            return True
 
         except Exception as e:
-            print(f"Error sending bluetooth message: {e}")
+            print(f"Error during disconnect: {e}")
             return False
 
     @staticmethod
-    def get_buffer() -> str:
-        """Get bluetooth buffer contents and clear the buffer"""
-        if not BluetoothModule._initialized:
-            print("Error: Bluetooth not initialized")
-            return ""
-
-        try:
-            if BluetoothModule._buffer:
-                # Return all buffered lines and clear the buffer
-                buffer_content = "\n".join(BluetoothModule._buffer)
-                BluetoothModule._buffer.clear()
-                return buffer_content
-            else:
-                return ""  # Empty buffer
-
-        except Exception as e:
-            print(f"Error reading bluetooth buffer: {e}")
-            return ""
-
-    @staticmethod
-    def stop():
-        """Stop the bluetooth module and free resources"""
-        if BluetoothModule._initialized:
-            BluetoothModule._cleanup()
-
-    @staticmethod
-    def _cleanup():
-        """Clean up bluetooth resources"""
+    def _cleanup_connection():
+        """Clean up connection resources (not the module itself)"""
         BluetoothModule._running = False
         BluetoothModule._connected = False
 
@@ -135,30 +132,70 @@ class BluetoothModule:
         BluetoothModule._cleanup_serial()
 
         # Release RFCOMM binding
-        BluetoothModule._cleanup_rfcomm_binding()
+        BluetoothModule._cleanup_rfcomm_binding(BluetoothModule._sudo_password)
 
+    @staticmethod
+    def stop():
+        """Stop the bluetooth module and free all resources"""
+        if BluetoothModule._initialized:
+            # Disconnect first if connected
+            if BluetoothModule._connected:
+                BluetoothModule.disconnect()
+
+            # Clean up module
+            BluetoothModule._initialized = False
+            BluetoothModule._sudo_password = None
+            print("✅ Bluetooth module stopped")
+
+    @staticmethod
+    def _cleanup():
+        """Clean up bluetooth resources (legacy method for compatibility)"""
+        BluetoothModule._cleanup_connection()
         BluetoothModule._initialized = False
 
     @staticmethod
-    def _setup_rfcomm_binding() -> bool:
-        """Setup RFCOMM binding to ESP32"""
+    def _setup_rfcomm_binding(mac_address: str, sudo_password: str = None) -> bool:
+        """Setup RFCOMM binding to specified MAC address"""
         try:
-            print(f"🔗 Binding RFCOMM to {BluetoothModule._esp32_mac}...")
             # First try to release any existing binding
             try:
-                subprocess.run(["sudo", "rfcomm", "release", "0"], capture_output=True, text=True, timeout=5)
+                if sudo_password:
+                    release_cmd = subprocess.Popen(
+                        ["sudo", "-S", "rfcomm", "release", "0"],
+                        stdin=subprocess.PIPE,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        text=True
+                    )
+                    release_cmd.communicate(input=sudo_password + "\n", timeout=5)
+                else:
+                    subprocess.run(["sudo", "rfcomm", "release", "0"], capture_output=True, text=True, timeout=5)
             except Exception:
                 pass
 
-            # Bind to the ESP32
-            res = subprocess.run(["sudo", "rfcomm", "bind", "0", BluetoothModule._esp32_mac, "1"],
-                               capture_output=True, text=True, timeout=10)
-            if res.returncode != 0:
-                print(f"❌ Failed to bind RFCOMM: {res.stderr}")
-                return False
+            # Bind to the specified MAC address
+            if sudo_password:
+                bind_cmd = subprocess.Popen(
+                    ["sudo", "-S", "rfcomm", "bind", "0", mac_address, "1"],
+                    stdin=subprocess.PIPE,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True
+                )
+                stdout, stderr = bind_cmd.communicate(input=sudo_password + "\n", timeout=10)
+
+                if bind_cmd.returncode != 0:
+                    print(f"Error: Failed to bind RFCOMM: {stderr}")
+                    return False
+            else:
+                res = subprocess.run(["sudo", "rfcomm", "bind", "0", mac_address, "1"],
+                                   capture_output=True, text=True, timeout=10)
+                if res.returncode != 0:
+                    print(f"Error: Failed to bind RFCOMM: {res.stderr}")
+                    return False
 
             BluetoothModule._rfcomm_bound = True
-            print(f"✅ RFCOMM bound to {BluetoothModule._rfcomm_device}")
+            print(f"Info: RFCOMM bound to {BluetoothModule._rfcomm_device}")
             time.sleep(1)  # Give it time to establish
             return True
 
@@ -167,11 +204,21 @@ class BluetoothModule:
             return False
 
     @staticmethod
-    def _cleanup_rfcomm_binding():
+    def _cleanup_rfcomm_binding(sudo_password: str = None):
         """Release RFCOMM binding"""
         if BluetoothModule._rfcomm_bound:
             try:
-                subprocess.run(["sudo", "rfcomm", "release", "0"], capture_output=True, text=True, timeout=5)
+                if sudo_password:
+                    release_cmd = subprocess.Popen(
+                        ["sudo", "-S", "rfcomm", "release", "0"],
+                        stdin=subprocess.PIPE,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        text=True
+                    )
+                    release_cmd.communicate(input=sudo_password + "\n", timeout=5)
+                else:
+                    subprocess.run(["sudo", "rfcomm", "release", "0"], capture_output=True, text=True, timeout=5)
                 print("✅ RFCOMM released")
             except Exception as e:
                 print(f"⚠️ RFCOMM release warning: {e}")
