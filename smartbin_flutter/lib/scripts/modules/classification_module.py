@@ -23,11 +23,11 @@ class ClassificationModule:
     def init() -> bool:
         """Initialize classification module with lazy imports"""
         if ClassificationModule._initialized:
-            print("Classification module already initialized")
+            print("Success")
             return True
 
         try:
-            print("Initializing classification module...")
+            # print("Initializing classification module...")
 
             # Lazy import of heavy libraries only when needed
             try:
@@ -43,7 +43,7 @@ class ClassificationModule:
                 ClassificationModule._model = "mock_model"
 
             except ImportError as e:
-                print(f"⚠️ YOLO import failed: {e}. Using mock classification.")
+                print(f"Error: {e}. Using mock classification.")
                 ClassificationModule._model = "mock_model"
             except Exception as e:
                 print(f"⚠️ Model loading failed: {e}. Using mock classification.")

@@ -34,7 +34,8 @@ class Engine {
       print("Initialization cancelled. Module is already initialized");
       return;
     }
-    
+
+    print("Starting engine");
     try {
       process = await Process.start('python', [engineScript, "start"]);
 
@@ -92,6 +93,7 @@ class Engine {
 
     try {
       final response = await _responseStream!.first.timeout(timeout);
+      print("← $response");
       return response;
     } on TimeoutException {
       print("Timeout waiting for response after ${timeout.inSeconds} seconds");
@@ -113,6 +115,8 @@ class Engine {
       // Send the command
       process!.stdin.writeln(command);
       await process!.stdin.flush();
+      
+      print("→ $command");
 
       // Wait for response
       return await waitForResponse(timeout);

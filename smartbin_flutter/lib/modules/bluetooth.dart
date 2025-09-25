@@ -23,7 +23,11 @@ class Bluetooth {
 
     String? response = await Engine.sendCommand("bluetooth init", timeout: Duration(seconds: 10));
     if (response?.toLowerCase() == "success") {
-      print("Error: Initialization failed. Success message not received");
+      print("Initialization complete.");
+    }
+    else {
+      throw Exception("Initialization failed. Success message not received");
+
     }
   }
 

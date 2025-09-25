@@ -53,6 +53,7 @@ class _InitializationScreenState extends State<InitializationScreen> {
         } catch (e) {
           // Record error but continue; you can change to rethrow to stop
           _error = e.toString();
+          rethrow;
         }
         setState(() {
           _completedWeight += step.weight;
