@@ -1,3 +1,4 @@
+// Copilot: Unique comment for verification - Security module integration planned here.
 import 'package:flutter/material.dart';
 import 'package:smartbin_flutter/modules/bluetooth.dart';
 import 'package:smartbin_flutter/modules/config.dart';
@@ -7,6 +8,7 @@ import 'package:smartbin_flutter/screens/initialization_screen.dart';
 import 'package:smartbin_flutter/themes.dart';
 import 'models/init_step.dart';
 import 'modules/classification.dart';
+import 'package:smartbin_flutter/modules/security.dart';
 
 void main() {
   runApp(const MyApp());
@@ -34,6 +36,7 @@ class StartupEntry extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final steps = <InitStep>[
+      InitStep(description: 'Security check', weight: 1.0, action: () => Security.init(context)),
       InitStep(description: 'Loading config', weight: 1.0, action: Config.init),
       InitStep(description: 'Starting engine', weight: 1.0, action: Engine.init),
       InitStep(description: 'Initializing bluetooth protocol module', weight: 1.0, action: Bluetooth.init),
@@ -47,4 +50,3 @@ class StartupEntry extends StatelessWidget {
     );
   }
 }
-

@@ -15,7 +15,7 @@ class Classification {
       );
       return;
     }
-    print("Initializing module...");
+    print("Initializing classification...");
     String? response = await Engine.sendCommand("classify init");
     // print("DEBUG $response");
     if (response == null) {

@@ -3,14 +3,13 @@
 import random
 from typing import Dict, Any, Optional
 import json
-
+YOLO = None
 
 class ClassificationModule:
     """Classification module with static methods and fields"""
 
-    # Static fields
-    _initialized = False
-    _model = None
+    is_initialized = False
+    model = None
 
     # Known classes for classification
     _classes = ['aluminium', 'plastic', 'paper', 'glass', 'organic', 'metal', 'cardboard']
@@ -32,7 +31,7 @@ class ClassificationModule:
             print(json.dumps(classes))
 
         elif len(args) >= 1:  # classify with image path
-            if not ClassificationModule.is_initialized():
+            if not ClassificationModule.is_initialized:
                 print("Error: Classification not initialized")
                 return
 
@@ -50,21 +49,15 @@ class ClassificationModule:
         else:
             print("Error: Unknown classification subcommand")
 
-    @staticmethod
-    def is_initialized() -> bool:
-        """Check if classification module is initialized"""
-        return ClassificationModule._initialized
 
     @staticmethod
     def init() -> bool:
         """Initialize classification module with lazy imports"""
-        if ClassificationModule._initialized:
-            print("Success")
+        if ClassificationModule.is_initialized:
+            print("Success - classification already initialized.")
             return True
 
         try:
-            # print("Initializing classification module...")
-
             # Lazy import of heavy libraries only when needed
             try:
                 global YOLO
@@ -76,14 +69,14 @@ class ClassificationModule:
                 # print("✅ YOLO model loaded")
 
                 # For now, just set a placeholder
-                ClassificationModule._model = "mock_model"
+                ClassificationModule.model = "mock_model"
 
             except ImportError as e:
                 print(f"Error: {e}. Using mock classification.")
-                ClassificationModule._model = "mock_model"
+                ClassificationModule.model = "mock_model"
             except Exception as e:
                 print(f"⚠️ Model loading failed: {e}. Using mock classification.")
-                ClassificationModule._model = "mock_model"
+                ClassificationModule.model = "mock_model"
 
             ClassificationModule._initialized = True
             return True
@@ -95,7 +88,7 @@ class ClassificationModule:
     @staticmethod
     def classify(image_path: str) -> Optional[Dict[str, Any]]:
         """Classify an image and return confidence scores"""
-        if not ClassificationModule._initialized:
+        if not ClassificationModule.is_initialized:
             print("Error: Classification not initialized")
             return None
 
@@ -105,7 +98,7 @@ class ClassificationModule:
                 return {"error": "No image path provided"}
 
             # TODO: Replace with actual classification when model is loaded
-            if ClassificationModule._model == "mock_model":
+            if ClassificationModule.model == "mock_model":
                 return ClassificationModule._mock_classify(image_path)
             else:
                 # Actual YOLO classification
@@ -118,7 +111,7 @@ class ClassificationModule:
     @staticmethod
     def stop():
         """Stop the classification module and free resources"""
-        if ClassificationModule._initialized:
+        if ClassificationModule.is_initialized:
             ClassificationModule._cleanup()
 
     @staticmethod
@@ -126,11 +119,11 @@ class ClassificationModule:
         """Clean up classification resources"""
         try:
             # Free model memory if loaded
-            if ClassificationModule._model and ClassificationModule._model != "mock_model":
-                del ClassificationModule._model
+            if ClassificationModule.model and ClassificationModule.model != "mock_model":
+                del ClassificationModule.model
                 print("✅ Classification model freed from memory")
 
-            ClassificationModule._model = None
+            ClassificationModule.model = None
             ClassificationModule._initialized = False
 
         except Exception as e:
@@ -199,8 +192,8 @@ class ClassificationModule:
     def get_model_info() -> Dict[str, Any]:
         """Get information about the loaded model"""
         return {
-            "initialized": ClassificationModule._initialized,
-            "model_type": "mock" if ClassificationModule._model == "mock_model" else "yolo",
+            "initialized": ClassificationModule.is_initialized,
+            "model_type": "mock" if ClassificationModule.model == "mock_model" else "yolo",
             "classes": ClassificationModule._classes,
             "num_classes": len(ClassificationModule._classes)
         }

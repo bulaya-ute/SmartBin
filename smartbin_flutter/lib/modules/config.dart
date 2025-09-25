@@ -13,13 +13,13 @@ class Config extends BaseModule {
       print("Initialization cancelled. Config module already initialized.");
       return;
     }
-    print("Initializing module...");
+    print("Loading configurations...");
     // TODO: Put init logic here
-    print("Initialization successful.");
+    print("Configurations loaded.");
   }
 
-  // static void print(String message) {
-  //   debugPrint("[CONFIG] $message");
-  // }
+  static void print(String message) {
+    debugPrint("[CONFIG] $message");
+  }
 
 }

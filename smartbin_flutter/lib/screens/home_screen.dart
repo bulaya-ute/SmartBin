@@ -44,7 +44,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   ConnectionState _connectionState = ConnectionState.disconnected;
   bool autoscroll = true;
-  bool autoReconnect = true;
+  bool autoReconnect = false;
 
   // Real data from backend
   List<String> _detectionClasses = [];
