@@ -1,10 +1,11 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide ConnectionState;
 import 'package:smartbin_flutter/dense_textfield.dart';
+import '../screens/home_screen.dart';
 
 class BottomControls extends StatefulWidget {
   const BottomControls({
     super.key,
-    required this.connected,
+    required this.connectionState,
     required this.onToggleConnect,
     required this.autoReconnect,
     required this.onToggleAutoReconnect,
@@ -12,7 +13,7 @@ class BottomControls extends StatefulWidget {
     this.onSendCommand,
   });
 
-  final bool connected;
+  final ConnectionState connectionState;
   final VoidCallback onToggleConnect;
   final bool autoReconnect;
   final ValueChanged<bool> onToggleAutoReconnect;
@@ -33,6 +34,26 @@ class _BottomControlsState extends State<BottomControls> {
     _cmdCtl.clear();
   }
 
+  String _getConnectButtonText() {
+    switch (widget.connectionState) {
+      case ConnectionState.connected:
+        return 'Disconnect';
+      case ConnectionState.connecting:
+        return 'Connecting...';
+      case ConnectionState.disconnected:
+      default:
+        return 'Connect';
+    }
+  }
+
+  bool _isConnectButtonEnabled() {
+    return widget.connectionState != ConnectionState.connecting;
+  }
+
+  bool _areCommandControlsEnabled() {
+    return widget.connectionState == ConnectionState.connected;
+  }
+
   @override
   void dispose() {
     _cmdCtl.dispose();
@@ -51,38 +72,14 @@ class _BottomControlsState extends State<BottomControls> {
         children: [
           Row(
             children: [
-              // Container(
-              //   decoration: BoxDecoration(
-              //     color: widget.connected
-              //         ? const Color(0xFFD4EDDA)
-              //         : const Color(0xFFF8D7DA),
-              //     border: Border.all(
-              //       color: widget.connected
-              //           ? const Color(0xFFC3E6CB)
-              //           : const Color(0xFFF5C6CB),
-              //     ),
-              //     borderRadius: BorderRadius.circular(16),
-              //   ),
-              //   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              //   child: Text(
-              //     widget.connected ? '🟢 Connected' : '🔴 Disconnected',
-              //     style: TextStyle(
-              //       color: widget.connected
-              //           ? const Color(0xFF155724)
-              //           : const Color(0xFF721C24),
-              //       fontWeight: FontWeight.bold,
-              //       fontSize: 12,
-              //     ),
-              //   ),
-              // ),
               const SizedBox(width: 16),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue,
+                  backgroundColor: _isConnectButtonEnabled() ? Colors.blue : Colors.grey,
                   foregroundColor: Colors.white,
                 ),
-                onPressed: widget.onToggleConnect,
-                child: Text(widget.connected ? 'Disconnect' : 'Connect'),
+                onPressed: _isConnectButtonEnabled() ? widget.onToggleConnect : null,
+                child: Text(_getConnectButtonText()),
               ),
               const SizedBox(width: 20),
               Transform.scale(
@@ -107,21 +104,33 @@ class _BottomControlsState extends State<BottomControls> {
           const SizedBox(height: 16),
           Row(
             children: [
-              const Text('Send command:'),
+              Text(
+                'Send command:',
+                style: TextStyle(
+                  color: _areCommandControlsEnabled() ? null : Colors.grey,
+                ),
+              ),
               const SizedBox(width: 8),
               Expanded(
                 child: DenseTextField(
                   controller: _cmdCtl,
+                  enabled: _areCommandControlsEnabled(),
                   textInputAction: TextInputAction.send,
-                  onSubmitted: _sendCommandIfAny,
-                  decoration: const InputDecoration(
-                    hintText: 'e.g. RTC00',
+                  onSubmitted: _areCommandControlsEnabled() ? _sendCommandIfAny : null,
+                  decoration: InputDecoration(
+                    hintText: _areCommandControlsEnabled() ? 'e.g. RTC00' : 'Connect to enable commands',
+                    hintStyle: TextStyle(
+                      color: _areCommandControlsEnabled() ? null : Colors.grey,
+                    ),
                   ),
                 ),
               ),
               const SizedBox(width: 16),
               ElevatedButton(
-                onPressed: _sendCommandIfAny,
+                onPressed: _areCommandControlsEnabled() ? _sendCommandIfAny : null,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _areCommandControlsEnabled() ? null : Colors.grey,
+                ),
                 child: const Text('Send'),
               ),
             ],

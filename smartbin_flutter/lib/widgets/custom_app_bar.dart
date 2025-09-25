@@ -1,12 +1,13 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide ConnectionState;
+import '../screens/home_screen.dart';
 
 class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
-  final bool connected;
+  final ConnectionState connectionState;
   final VoidCallback? onConnectionTap;
 
   const CustomAppBar({
     super.key,
-    required this.connected,
+    required this.connectionState,
     this.onConnectionTap,
   });
 
@@ -24,28 +25,14 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Container(
-                  width: 12,
-                  height: 12,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: connected ? Colors.green : Colors.red,
-                    boxShadow: [
-                      BoxShadow(
-                        color: (connected ? Colors.green : Colors.red).withOpacity(0.3),
-                        blurRadius: 4,
-                        spreadRadius: 1,
-                      ),
-                    ],
-                  ),
-                ),
+                _buildConnectionIndicator(),
                 const SizedBox(width: 8),
                 Text(
-                  connected ? 'Connected' : 'Disconnected',
+                  _getConnectionText(),
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w500,
-                    color: connected ? Colors.green : Colors.red,
+                    color: _getConnectionColor(),
                   ),
                 ),
               ],
@@ -54,6 +41,79 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
         ),
       ],
     );
+  }
+
+  Widget _buildConnectionIndicator() {
+    switch (connectionState) {
+      case ConnectionState.connected:
+        return Container(
+          width: 12,
+          height: 12,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: Colors.green,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.green.withOpacity(0.3),
+                blurRadius: 4,
+                spreadRadius: 1,
+              ),
+            ],
+          ),
+        );
+
+      case ConnectionState.connecting:
+        return SizedBox(
+          width: 12,
+          height: 12,
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            valueColor: AlwaysStoppedAnimation<Color>(Colors.orange),
+          ),
+        );
+
+      case ConnectionState.disconnected:
+      default:
+        return Container(
+          width: 12,
+          height: 12,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: Colors.red,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.red.withOpacity(0.3),
+                blurRadius: 4,
+                spreadRadius: 1,
+              ),
+            ],
+          ),
+        );
+    }
+  }
+
+  String _getConnectionText() {
+    switch (connectionState) {
+      case ConnectionState.connected:
+        return 'Connected';
+      case ConnectionState.connecting:
+        return 'Connecting...';
+      case ConnectionState.disconnected:
+      default:
+        return 'Disconnected';
+    }
+  }
+
+  Color _getConnectionColor() {
+    switch (connectionState) {
+      case ConnectionState.connected:
+        return Colors.green;
+      case ConnectionState.connecting:
+        return Colors.orange;
+      case ConnectionState.disconnected:
+      default:
+        return Colors.red;
+    }
   }
 
   @override

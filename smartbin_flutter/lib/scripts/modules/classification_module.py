@@ -2,6 +2,7 @@
 
 import random
 from typing import Dict, Any, Optional
+import json
 
 
 class ClassificationModule:
@@ -13,6 +14,41 @@ class ClassificationModule:
 
     # Known classes for classification
     _classes = ['aluminium', 'plastic', 'paper', 'glass', 'organic', 'metal', 'cardboard']
+
+    @staticmethod
+    def handle_command(args: list):
+        """Handle classification commands"""
+        if not args:
+            print("Error: No classification subcommand provided")
+            return
+
+        subcommand = args[0]
+
+        if subcommand == 'init':
+            ClassificationModule.init()
+
+        elif subcommand == 'get-classes':
+            classes = ClassificationModule.get_classes()
+            print(json.dumps(classes))
+
+        elif len(args) >= 1:  # classify with image path
+            if not ClassificationModule.is_initialized():
+                print("Error: Classification not initialized")
+                return
+
+            image_path = ' '.join(args)  # Join all args as image path
+            if not image_path:
+                print(json.dumps({"error": "No image path provided"}))
+                return
+
+            result = ClassificationModule.classify(image_path)
+            if result:
+                print(json.dumps(result))
+            else:
+                print(json.dumps({"error": "Classification failed"}))
+
+        else:
+            print("Error: Unknown classification subcommand")
 
     @staticmethod
     def is_initialized() -> bool:

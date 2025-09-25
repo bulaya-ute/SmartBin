@@ -1,6 +1,7 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide ConnectionState;
 import 'package:smartbin_flutter/widgets/image_preview_section.dart';
 import 'package:smartbin_flutter/widgets/status_section.dart';
+import '../screens/home_screen.dart';
 
 class TopSection extends StatelessWidget {
   TopSection({
@@ -12,6 +13,7 @@ class TopSection extends StatelessWidget {
     required this.onLeftRatioChanged,
     required this.detectionClasses,
     required this.classificationResult,
+    required this.connectionState,
   });
 
   final double leftRatio; // fraction of available width for left panel
@@ -19,8 +21,9 @@ class TopSection extends StatelessWidget {
   final double minRightWidth;
   final double splitterThickness;
   final ValueChanged<double> onLeftRatioChanged;
-  List<String> detectionClasses;
-Map<String, dynamic>? classificationResult;
+  final List<String> detectionClasses;
+  final Map<String, dynamic>? classificationResult;
+  final ConnectionState connectionState;
 
   @override
   Widget build(BuildContext context) {
@@ -91,7 +94,12 @@ Map<String, dynamic>? classificationResult;
             ),
 
             // Right: Status section grows to fill remaining space
-            Expanded(child: StatusSection(initialDetectionCounts: detectionCounts,)),
+            Expanded(
+              child: StatusSection(
+                initialDetectionCounts: detectionCounts,
+                connectionState: connectionState,
+              ),
+            ),
           ],
         );
       },

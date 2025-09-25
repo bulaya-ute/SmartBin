@@ -1,11 +1,13 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide ConnectionState;
 import 'package:smartbin_flutter/widgets/section_header.dart';
+import '../screens/home_screen.dart';
 
 class StatusSection extends StatefulWidget {
   final int initialRecyclable;
   final int initialNonRecyclable;
   final int initialCoins;
   final Map<String, int>? initialDetectionCounts;
+  final ConnectionState connectionState;
 
   const StatusSection({
     super.key,
@@ -13,6 +15,7 @@ class StatusSection extends StatefulWidget {
     this.initialNonRecyclable = 0,
     this.initialCoins = 0,
     this.initialDetectionCounts,
+    this.connectionState = ConnectionState.disconnected,
   });
 
   @override
@@ -33,6 +36,8 @@ class _StatusSectionState extends State<StatusSection> {
           'E-waste': 0,
         },
   );
+
+  bool get _areButtonsEnabled => widget.connectionState == ConnectionState.connected;
 
   Future<void> _setValueDialog({
     required String title,
@@ -102,9 +107,21 @@ class _StatusSectionState extends State<StatusSection> {
                   ),
                 ),
                 const Spacer(),
-                OutlinedButton(onPressed: onReset, child: const Text('Reset')),
+                OutlinedButton(
+                  onPressed: _areButtonsEnabled ? onReset : null,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: _areButtonsEnabled ? null : Colors.grey,
+                  ),
+                  child: const Text('Reset'),
+                ),
                 const SizedBox(width: 8),
-                ElevatedButton(onPressed: onSet, child: const Text('Set')),
+                ElevatedButton(
+                  onPressed: _areButtonsEnabled ? onSet : null,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _areButtonsEnabled ? null : Colors.grey,
+                  ),
+                  child: const Text('Set'),
+                ),
               ],
             ),
           ],

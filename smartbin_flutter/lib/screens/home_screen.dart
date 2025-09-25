@@ -11,6 +11,12 @@ import '../modules/bluetooth.dart';
 import '../modules/engine.dart';
 import '../modules/classification.dart';
 
+enum ConnectionState {
+  disconnected,
+  connecting,
+  connected,
+}
+
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -36,7 +42,7 @@ class _HomeScreenState extends State<HomeScreen> {
   static const double _minLeftWidth = 200;
   static const double _minRightWidth = 280;
 
-  bool _connected = false;
+  ConnectionState _connectionState = ConnectionState.disconnected;
   bool autoscroll = true;
   bool autoReconnect = true;
 
@@ -46,6 +52,11 @@ class _HomeScreenState extends State<HomeScreen> {
   Timer? _bufferReadTimer;
 
   final List<LogMessage> _messages = [];
+
+  // Computed getters for connection state
+  bool get isConnected => _connectionState == ConnectionState.connected;
+  bool get isConnecting => _connectionState == ConnectionState.connecting;
+  bool get isDisconnected => _connectionState == ConnectionState.disconnected;
 
   @override
   void initState() {
@@ -95,7 +106,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _startBufferReading() {
     _bufferReadTimer = Timer.periodic(Duration(milliseconds: 500), (timer) async {
-      if (_connected) {
+      if (isConnected) {
         try {
           String? buffer = await Bluetooth.readBuffer();
           if (buffer != null && buffer.isNotEmpty) {
@@ -175,30 +186,40 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _toggleConnection() async {
-    if (_connected) {
+    if (isConnected) {
       // Disconnect
       try {
-        await Engine.sendCommand('bluetooth disconnect');
         setState(() {
-          _connected = false;
+          _connectionState = ConnectionState.disconnected;
         });
+        await Engine.sendCommand('bluetooth disconnect');
         _addLogMessage('Disconnected from SmartBin', Colors.orange);
       } catch (e) {
         _addLogMessage('Error disconnecting: $e', Colors.red);
+        setState(() {
+          _connectionState = ConnectionState.disconnected;
+        });
       }
-    } else {
+    } else if (isDisconnected) {
       // Connect
       try {
+        setState(() {
+          _connectionState = ConnectionState.connecting;
+        });
         _addLogMessage('→ Connecting to SmartBin...', Colors.blue);
         await Bluetooth.connect(macAddress: _macCtl.text);
         setState(() {
-          _connected = true;
+          _connectionState = ConnectionState.connected;
         });
         _addLogMessage('← Device connected successfully', Colors.green);
       } catch (e) {
         _addLogMessage('Connection failed: $e', Colors.red);
+        setState(() {
+          _connectionState = ConnectionState.disconnected;
+        });
       }
     }
+    // If connecting, do nothing (button should be disabled)
   }
 
   Future<void> _sendCommand(String command) async {
@@ -225,11 +246,11 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: CustomAppBar(
-        connected: _connected,
+        connectionState: _connectionState,
         onConnectionTap: _toggleConnection,
       ),
       bottomNavigationBar: BottomControls(
-        connected: _connected,
+        connectionState: _connectionState,
         onToggleConnect: _toggleConnection,
         autoReconnect: autoReconnect,
         onToggleAutoReconnect: (v) => setState(() => autoReconnect = v),
@@ -267,6 +288,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     // Pass real data to TopSection
                     detectionClasses: _detectionClasses,
                     classificationResult: _classificationResult,
+                    connectionState: _connectionState,
                   ),
                 ),
 

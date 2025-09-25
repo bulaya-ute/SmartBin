@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-
+import os
 import subprocess
 import threading
 import time
@@ -30,6 +30,73 @@ class BluetoothModule:
     _image_metadata = {}
     _image_parts = {}
     _expected_parts = 0
+
+    @staticmethod
+    def handle_command(args: list):
+        """Handle bluetooth commands"""
+        if not args:
+            print("Error: No bluetooth subcommand provided")
+            return
+
+        subcommand = args[0]
+
+        if subcommand == 'init':
+            sudo_password = args[1] if len(args) > 1 else None
+            BluetoothModule.init(sudo_password)
+
+        elif subcommand == 'connect':
+            mac_address = args[1] if len(args) > 1 else None
+            success = BluetoothModule.connect(mac_address)
+            if success:
+                print("success")
+
+        elif subcommand == 'disconnect':
+            success = BluetoothModule.disconnect()
+            if success:
+                print("success")
+
+        elif subcommand == 'send':
+            if len(args) < 2:
+                print("Error: No message provided")
+                return
+            message = ' '.join(args[1:])  # Join remaining args as message
+            success = BluetoothModule.transmit_message(message)
+
+        elif len(args) >= 2 and args[0] == 'get' and args[1] == 'buffer':
+            buffer_content = BluetoothModule.get_buffer()
+            print(buffer_content)
+
+        else:
+            print("Error: Unknown bluetooth subcommand")
+
+    @staticmethod
+    def transmit_message(message: str) -> bool:
+        """Transmit a message via bluetooth"""
+        if not BluetoothModule._connected:
+            print("Error: Not connected to ESP32")
+            return False
+
+        try:
+            # Add to buffer for logging
+            BluetoothModule._buffer.append(f"SENT: {message}")
+
+            # Send the message
+            return BluetoothModule._send_bluetooth_message("", message)
+        except Exception as e:
+            print(f"Error transmitting message: {e}")
+            return False
+
+    @staticmethod
+    def get_buffer() -> list:
+        """Get and clear the bluetooth buffer"""
+        buffer_copy = BluetoothModule._buffer.copy()
+        BluetoothModule._buffer.clear()
+        return buffer_copy
+
+    @staticmethod
+    def read_buffer() -> list:
+        """Read the bluetooth buffer without clearing it"""
+        return BluetoothModule._buffer.copy()
 
     @staticmethod
     def is_initialized() -> bool:
@@ -280,7 +347,9 @@ class BluetoothModule:
                 if BluetoothModule._running:
                     print(f"❌ Bluetooth reader error: {e}")
                 break
-        print("📖 Bluetooth reader stopped")
+        print("📖 Bluetooth reader stopped. Disconnecting bluetooth...")
+        BluetoothModule.handle_command(["disconnect"])
+
 
     @staticmethod
     def _process_bluetooth_line(line: str):
@@ -404,8 +473,8 @@ class BluetoothModule:
             image_data = base64.b64decode(base64_data)
 
             # Save image temporarily and add to buffer for Flutter app
-            timestamp = int(time.time())
-            image_path = f"/tmp/smartbin_image_{timestamp}.jpg"
+            # timestamp = int(time.time())
+            image_path = f"./smartbin_capture.jpg"
 
             with open(image_path, 'wb') as f:
                 f.write(image_data)

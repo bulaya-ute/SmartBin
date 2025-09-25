@@ -51,7 +51,7 @@ class Bluetooth extends BaseModule{
       return;
     }
 
-    print("Connecting at $macAddress...");
+    print("Connecting to device at $macAddress...");
 
     try {
       // Send connect command to Python backend

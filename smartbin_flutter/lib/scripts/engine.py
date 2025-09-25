@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-
+from modules.utils import split_command
 import sys
 import json
 
@@ -26,159 +26,157 @@ class SmartBinEngine:
 
         print("✅ Engine stopped and resources freed")
 
+    @staticmethod
+    def process_command(command: str):
+        """Process a single command, and dispatch to appropriate module"""
 
-def handle_classification_init():
-    """Initialize classification module"""
-    success = ClassificationModule.init()
-    if success:
-        print("success")
-    # Error messages are already printed by the module
+        # Handle stop command
+        if command == 'stop':
+            SmartBinEngine.stop()
 
+        # Split the command
+        command_parts = split_command(command)
 
-def handle_bluetooth_init(sudo_password: str = None):
-    """Initialize bluetooth module with optional sudo password"""
-    success = BluetoothModule.init(sudo_password)
-    if success:
-        print("success")
-    # Error messages are already printed by the module
+        if not command_parts:
+            print("Error: Empty command")
+            return
+        elif len(command_parts) == 1:
+            remaining_args = []
+        else:
+            remaining_args = command_parts[1:]
 
+        # Get the main command (first part)
+        main_command = command_parts[0]
 
-def handle_bluetooth_send(message: str):
-    """Send message via bluetooth"""
-    success = BluetoothModule.send_message(message)
-    if success:
-        print("success")
-    # Error messages are already printed by the module
-
-
-def handle_bluetooth_get_buffer():
-    """Get bluetooth buffer contents and clear the buffer"""
-    buffer_content = BluetoothModule.get_buffer()
-    print(buffer_content)
-
-
-def handle_classify(image_path: str):
-    """Handle classification request"""
-    result = ClassificationModule.classify(image_path)
-    if result:
-        print(json.dumps(result))
-    else:
-        print(json.dumps({"error": "Classification failed"}))
+        # Dispatch to appropriate module
+        if main_command in ['classify', "classification"]:
+            ClassificationModule.handle_command(remaining_args)
+        elif main_command == 'bluetooth':
+            BluetoothModule.handle_command(remaining_args)
+        else:
+            print("Error: Unknown command")
 
 
-def handle_bluetooth_connect(mac_address: str = None):
-    """Handle bluetooth connect command"""
-    success = BluetoothModule.connect(mac_address)
-    if success:
-        print("success")
-    # Error messages are already printed by the module
+    # @staticmethod
+    # def handle_classification_init():
+    #     """Initialize classification module"""
+    #     success = ClassificationModule.init()
+    #     # if success:
+    #     #     print("success")
+    #     # Error messages are already printed by the module
 
+    # @staticmethod
+    # def handle_bluetooth_init(sudo_password: str = None):
+    #     """Initialize bluetooth module with optional sudo password"""
+    #     success = BluetoothModule.init(sudo_password)
+    #     # if success:
+    #     #     print("success")
+    #     # Error messages are already printed by the module
 
-def handle_bluetooth_disconnect():
-    """Handle bluetooth disconnect command"""
-    success = BluetoothModule.disconnect()
-    if success:
-        print("success")
-    # Error messages are already printed by the module
+    # @staticmethod
+    # def handle_bluetooth_send(message: str):
+    #     """Send message via bluetooth"""
+    #     success = BluetoothModule.send_message(message)
+    #     # if success:
+    #     #     print("success")
+    #     # Error messages are already printed by the module
+    #
+    # @staticmethod
+    # def handle_bluetooth_get_buffer():
+    #     """Get bluetooth buffer contents and clear the buffer"""
+    #     buffer_content = BluetoothModule.get_buffer()
+    #     print(buffer_content)
+    #
+    # @staticmethod
+    # def handle_classify(image_path: str):
+    #     """Handle classification request"""
+    #     result = ClassificationModule.classify(image_path)
+    #     if result:
+    #         print(json.dumps(result))
+    #     else:
+    #         print(json.dumps({"error": "Classification failed"}))
+    #
+    # @staticmethod
+    # def handle_bluetooth_connect(mac_address: str = None):
+    #     """Handle bluetooth connect command"""
+    #     success = BluetoothModule.connect(mac_address)
+    #     if success:
+    #         print("success")
+    #     # Error messages are already printed by the module
+    #
+    # @staticmethod
+    # def handle_bluetooth_disconnect():
+    #     """Handle bluetooth disconnect command"""
+    #     success = BluetoothModule.disconnect()
+    #     if success:
+    #         print("success")
+    #     # Error messages are already printed by the module
 
+    # @staticmethod
+    # def handle_classification_get_classes():
+    #     """Handle classification get-classes command"""
+    #     classes = ClassificationModule.get_classes()
+    #     print(json.dumps(classes))
 
-def handle_classification_get_classes():
-    """Handle classification get-classes command"""
-    classes = ClassificationModule.get_classes()
-    print(json.dumps(classes))
+    @staticmethod
+    def main_loop():
+        # Check if the script is called with "start" argument
+        if len(sys.argv) != 2 or sys.argv[1] != "start":
+            print("Usage: python script.py start")
+            sys.exit(1)
 
+        print("ready")
 
-def main():
-    # Check if the script is called with "start" argument
-    if len(sys.argv) != 2 or sys.argv[1] != "start":
-        print("Usage: python script.py start")
-        sys.exit(1)
+        while True:
+            try:
+                # Get user input
+                command = input().strip()
 
-    print("ready")
+                if command.lower().strip() in ['exit', 'quit']:
+                    break
 
-    while True:
-        try:
-            # Get user input
-            user_input = input().strip()
+                SmartBinEngine.process_command(command)
 
-            # Handle exit commands
-            if user_input.lower() in ['exit', 'quit']:
+                # # # Handle exit commands
+                # # if command.lower() in ['exit', 'quit']:
+                # #     break
+                #
+                # # Handle stop command
+                # elif command == 'stop':
+                #     SmartBinEngine.stop()
+                #
+                # else:
+                #     # Import split_command function
+                #     from modules.utils import split_command
+                #
+                #     # Split the command
+                #     command_parts = split_command(command)
+                #
+                #     if not command_parts:
+                #         print("Error: Empty command")
+                #         continue
+                #
+                #     # Get the main command (first part)
+                #     main_command = command_parts[0]
+                #     remaining_args = command_parts[1:]
+                #
+                #     # Dispatch to appropriate module
+                #     if main_command == 'classify' or main_command == 'classification':
+                #         ClassificationModule.handle_command(remaining_args)
+                #     elif main_command == 'bluetooth':
+                #         BluetoothModule.handle_command(remaining_args)
+                #     else:
+                #         print("Error: Unknown command")
+
+            except KeyboardInterrupt:
+                print()
+                break
+            except EOFError:
                 break
 
-            # Handle stop command
-            elif user_input == 'stop':
-                SmartBinEngine.stop()
-
-            # Handle classification init command
-            elif user_input == 'classification init':
-                handle_classification_init()
-
-            # Handle bluetooth init command
-            elif user_input.startswith('bluetooth init'):
-                # Check if password is provided
-                parts = user_input.split(' ', 2)
-                sudo_password = parts[2] if len(parts) >= 3 else None
-                handle_bluetooth_init(sudo_password)
-
-            # Handle bluetooth send command
-            elif user_input.startswith('bluetooth send '):
-                message = user_input[15:].strip()  # Everything after "bluetooth send "
-                if not message:
-                    print("Error: No message provided")
-                else:
-                    handle_bluetooth_send(message)
-
-            # Handle bluetooth get buffer command
-            elif user_input == 'bluetooth get buffer':
-                handle_bluetooth_get_buffer()
-
-            # Handle classify command
-            elif user_input.startswith('classify '):
-                if not ClassificationModule.is_initialized():
-                    print("Error: Classification not initialized")
-                    continue
-
-                # Extract the image path (everything after "classify ")
-                image_path = user_input[9:].strip()
-
-                # Basic validation - check if path is not empty
-                if not image_path:
-                    print(json.dumps({"error": "No image path provided"}))
-                    continue
-
-                handle_classify(image_path)
-
-            # Handle bluetooth connect command
-            elif user_input.startswith('bluetooth connect '):
-                mac_address = user_input[17:].strip()  # Everything after "bluetooth connect "
-                if not mac_address:
-                    print("Error: No MAC address provided")
-                else:
-                    handle_bluetooth_connect(mac_address)
-
-            # Handle bluetooth disconnect command
-            elif user_input == 'bluetooth disconnect':
-                handle_bluetooth_disconnect()
-
-            # Handle classification get-classes command
-            elif user_input == 'classification get-classes':
-                handle_classification_get_classes()
-
-            else:
-                # Unknown command
-                print("Error: Unknown command")
-
-        except KeyboardInterrupt:
-            # Handle Ctrl+C gracefully
-            print()
-            break
-        except EOFError:
-            # Handle Ctrl+D or end of input
-            break
-
-    # Cleanup before exiting
-    SmartBinEngine.stop()
+        # Cleanup before exiting
+        SmartBinEngine.stop()
 
 
 if __name__ == "__main__":
-    main()
+    SmartBinEngine.main_loop()
