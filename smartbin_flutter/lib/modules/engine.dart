@@ -10,6 +10,11 @@ class Engine {
   static Process? process;
   static String engineScript = "lib/scripts/engine.py";
 
+  // Stream management
+  static StreamSubscription? _stdoutSubscription;
+  static StreamController<String>? _responseController;
+  static Stream<String>? _responseStream;
+
   static bool get isInitialized {
     if (!_isInitialized) {
       return false;
@@ -27,46 +32,79 @@ class Engine {
   static Future<void> init() async {
     if (isInitialized) {
       print("Initialization cancelled. Module is already initialized");
+      return;
     }
     
-    process = await Process.start('python', [engineScript, "start"]);
+    try {
+      process = await Process.start('python', [engineScript, "start"]);
 
-    String? response = await waitForResponse(Duration(seconds: 30));
-    print("Response: $response");
-    if (response?.toLowerCase() == "ready") {
-      isInitialized = true;
-      print("Initialization success");
-    } else {
+      // Set up single persistent stream listener
+      _setupStreamListener();
+
+      String? response = await waitForResponse(Duration(seconds: 30));
+      if (response?.toLowerCase() == "ready") {
+        isInitialized = true;
+        print("Initialization success");
+      } else {
+        isInitialized = false;
+        print("Error: Initialization failed. Ready status not received from backend");
+        await _cleanup();
+      }
+    } catch (e) {
+      print("Error during initialization: $e");
       isInitialized = false;
-      print("Error: Initialization failed. Ready status not received from backend");
+      await _cleanup();
     }
+  }
+
+  /// Set up a single persistent listener that broadcasts to multiple waiters
+  static void _setupStreamListener() {
+    _responseController = StreamController<String>.broadcast();
+    _responseStream = _responseController!.stream;
+
+    _stdoutSubscription = process!.stdout
+        .transform(utf8.decoder)
+        .transform(LineSplitter())
+        .listen(
+      (line) {
+        final trimmed = line.trim();
+        if (trimmed.isNotEmpty) {
+          _responseController!.add(trimmed);
+        }
+      },
+      onError: (error) {
+        print("Stream error: $error");
+        _responseController!.addError(error);
+      },
+      onDone: () {
+        print("Python process stdout closed");
+        _responseController!.close();
+      },
+    );
   }
 
   /// Waits for a non-empty response from the Python process within the specified timeout.
   static Future<String?> waitForResponse(Duration timeout) async {
-    final completer = Completer<String?>();
-    late StreamSubscription subscription;
-    late Timer timeoutTimer;
+    if (_responseStream == null) {
+      print("Error: Response stream not available");
+      return null;
+    }
 
-    subscription = process!.stdout.transform(utf8.decoder).listen((data) {
-      final trimmed = data.trim();
-      if (trimmed.isNotEmpty) {
-        subscription.cancel();
-        timeoutTimer.cancel();
-        completer.complete(trimmed);
-      }
-    });
-    timeoutTimer = Timer(timeout, () {
-      subscription.cancel();
-      completer.complete(null);
-    });
-
-    return await completer.future;
+    try {
+      final response = await _responseStream!.first.timeout(timeout);
+      return response;
+    } on TimeoutException {
+      print("Timeout waiting for response after ${timeout.inSeconds} seconds");
+      return null;
+    } catch (e) {
+      print("Error waiting for response: $e");
+      return null;
+    }
   }
 
   /// Send a command to the engine
-  static Future<String?> sendCommand(String command, {Duration timeout = const Duration(seconds: 2)}) async {
-    if (!isInitialized) { // Fixed: should be !isInitialized
+  static Future<String?> sendCommand(String command, {Duration timeout = const Duration(seconds: 5)}) async {
+    if (!isInitialized) {
       print("Error: Engine not initialized.");
       return null;
     }
@@ -74,13 +112,45 @@ class Engine {
     try {
       // Send the command
       process!.stdin.writeln(command);
+      await process!.stdin.flush();
 
-      // Wait for any non-empty response within the timeout
+      // Wait for response
       return await waitForResponse(timeout);
     } catch (e) {
       print("Error sending command '$command': $e");
       return null;
     }
+  }
+
+  /// Clean up resources
+  static Future<void> _cleanup() async {
+    await _stdoutSubscription?.cancel();
+    await _responseController?.close();
+    _stdoutSubscription = null;
+    _responseController = null;
+    _responseStream = null;
+
+    try {
+      process?.kill();
+    } catch (e) {
+      print("Error killing process: $e");
+    }
+    process = null;
+  }
+
+  /// Stop the engine and clean up
+  static Future<void> stop() async {
+    if (isInitialized) {
+      try {
+        await sendCommand("stop", timeout: Duration(seconds: 2));
+      } catch (e) {
+        print("Error sending stop command: $e");
+      }
+    }
+
+    await _cleanup();
+    isInitialized = false;
+    print("Engine stopped and cleaned up");
   }
 
   static void print(String message) {
