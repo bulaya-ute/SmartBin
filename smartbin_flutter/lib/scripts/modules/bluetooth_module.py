@@ -46,21 +46,17 @@ class BluetoothModule:
 
         elif subcommand == 'connect':
             mac_address = args[1] if len(args) > 1 else None
-            success = BluetoothModule.connect(mac_address)
-            if success:
-                print("success")
+            BluetoothModule.connect(mac_address)
 
         elif subcommand == 'disconnect':
-            success = BluetoothModule.disconnect()
-            if success:
-                print("success")
+            BluetoothModule.disconnect()
 
         elif subcommand == 'send':
             if len(args) < 2:
                 print("Error: No message provided")
                 return
             message = ' '.join(args[1:])  # Join remaining args as message
-            success = BluetoothModule.transmit_message(message)
+            BluetoothModule.transmit_message(message)
 
         elif len(args) >= 2 and args[0] == 'get' and args[1] == 'buffer':
             buffer_content = BluetoothModule.get_buffer()
@@ -187,19 +183,29 @@ class BluetoothModule:
     @staticmethod
     def _cleanup_connection():
         """Clean up connection resources (not the module itself)"""
+
+        def _cleanup_serial():
+            """Close serial connection"""
+            if BluetoothModule._ser and BluetoothModule._ser.is_open:
+                try:
+                    BluetoothModule._ser.close()
+                    print("✅ Serial connection closed")
+                except Exception as e:
+                    print(f"⚠️ Serial close warning: {e}")
+
+        # Close serial connection
+        _cleanup_serial()
+
+        # Release RFCOMM binding
+        BluetoothModule._cleanup_rfcomm_binding(BluetoothModule._sudo_password)
+
         BluetoothModule._running = False
         BluetoothModule._connected = False
 
         # Wait for reader thread to finish
         if BluetoothModule._reader_thread and BluetoothModule._reader_thread.is_alive():
-            BluetoothModule._reader_thread.join(timeout=2)
+            BluetoothModule._reader_thread.join(timeout=5)
             print("✅ Reader thread stopped")
-
-        # Close serial connection
-        BluetoothModule._cleanup_serial()
-
-        # Release RFCOMM binding
-        BluetoothModule._cleanup_rfcomm_binding(BluetoothModule._sudo_password)
 
     @staticmethod
     def stop():
@@ -314,15 +320,6 @@ class BluetoothModule:
             print(f"❌ Serial setup error: {e}")
             return False
 
-    @staticmethod
-    def _cleanup_serial():
-        """Close serial connection"""
-        if BluetoothModule._ser and BluetoothModule._ser.is_open:
-            try:
-                BluetoothModule._ser.close()
-                print("✅ Serial connection closed")
-            except Exception as e:
-                print(f"⚠️ Serial close warning: {e}")
 
     @staticmethod
     def _start_reader_thread():
@@ -348,7 +345,7 @@ class BluetoothModule:
                     print(f"❌ Bluetooth reader error: {e}")
                 break
         print("📖 Bluetooth reader stopped. Disconnecting bluetooth...")
-        BluetoothModule.handle_command(["disconnect"])
+        threading.Thread(target=BluetoothModule.disconnect, args=[]).start()
 
 
     @staticmethod

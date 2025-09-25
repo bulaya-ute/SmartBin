@@ -4,6 +4,7 @@ import 'package:smartbin_flutter/modules/engine.dart';
 
 class Bluetooth extends BaseModule{
   static bool _isInitialized = false;
+  static String? sudoPassword;
 
   static bool get isInitialized {
     if (!_isInitialized) {
@@ -18,7 +19,7 @@ class Bluetooth extends BaseModule{
   static String? rfcommBinding;
 
   /// Initialization method. Sends bluetooth init command to backend
-  static Future<void> init({String? sudoPassword}) async {
+  static Future<void> init() async {
     if (isInitialized) {
       print("Initialization cancelled. Module is already initialized");
       return;
@@ -28,9 +29,6 @@ class Bluetooth extends BaseModule{
 
     // Construct command with password if provided
     String command = "bluetooth init";
-    if (sudoPassword != null && sudoPassword.isNotEmpty) {
-      command += " $sudoPassword";
-    }
 
     String? successResponse = await Engine.sendCommand(command);
     if (successResponse == null) {
@@ -67,7 +65,7 @@ class Bluetooth extends BaseModule{
         print("Backend is attempting connection...");
 
         // Wait for additional responses about RFCOMM binding
-        String? rfcommResponse = await Engine.waitForResponse(Duration(seconds: 10));
+        String? rfcommResponse = await Engine.sendCommand("bluetooth connect ",timeout: Duration(seconds: 10));
         if (rfcommResponse != null && rfcommResponse.toLowerCase().startsWith("info: rfcomm bound to")) {
           rfcommBinding = rfcommResponse.substring("info: rfcomm bound to ".length).trim();
           print("RFCOMM bound to $rfcommBinding");
