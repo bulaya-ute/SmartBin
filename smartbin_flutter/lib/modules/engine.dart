@@ -7,7 +7,6 @@ import 'package:flutter/cupertino.dart';
 /// running classification model and bluetooth communication
 class Engine {
   static bool _isInitialized = false;
-  static String outputBuffer = "";
   static Process? process;
   static String engineScript = "lib/scripts/engine.py";
 
@@ -83,6 +82,7 @@ class Engine {
       return null;
     }
   }
+
   static void print(String message) {
     debugPrint("[ENGINE] $message");
   }

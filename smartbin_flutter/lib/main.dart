@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:smartbin_flutter/modules/bluetooth.dart';
 import 'package:smartbin_flutter/modules/config.dart';
 import 'package:smartbin_flutter/modules/engine.dart';
 import 'package:smartbin_flutter/screens/home_screen.dart';
@@ -36,7 +37,7 @@ class StartupEntry extends StatelessWidget {
       InitStep(description: 'Loading config', weight: 1.0, action: Config.init),
       InitStep(description: 'Starting engine', weight: 1.0, action: Engine.init),
       InitStep(description: 'Initializing classification module', weight: 1.0, action: Classification.init),
-      InitStep(description: 'Initializing bluetooth protocol module', weight: 1.0, action: Classification.init),
+      InitStep(description: 'Initializing bluetooth protocol module', weight: 1.0, action: Bluetooth.init),
     ];
 
     return InitializationScreen(
