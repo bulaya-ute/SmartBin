@@ -51,30 +51,30 @@ class _BottomControlsState extends State<BottomControls> {
         children: [
           Row(
             children: [
-              Container(
-                decoration: BoxDecoration(
-                  color: widget.connected
-                      ? const Color(0xFFD4EDDA)
-                      : const Color(0xFFF8D7DA),
-                  border: Border.all(
-                    color: widget.connected
-                        ? const Color(0xFFC3E6CB)
-                        : const Color(0xFFF5C6CB),
-                  ),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                child: Text(
-                  widget.connected ? '🟢 Connected' : '🔴 Disconnected',
-                  style: TextStyle(
-                    color: widget.connected
-                        ? const Color(0xFF155724)
-                        : const Color(0xFF721C24),
-                    fontWeight: FontWeight.bold,
-                    fontSize: 12,
-                  ),
-                ),
-              ),
+              // Container(
+              //   decoration: BoxDecoration(
+              //     color: widget.connected
+              //         ? const Color(0xFFD4EDDA)
+              //         : const Color(0xFFF8D7DA),
+              //     border: Border.all(
+              //       color: widget.connected
+              //           ? const Color(0xFFC3E6CB)
+              //           : const Color(0xFFF5C6CB),
+              //     ),
+              //     borderRadius: BorderRadius.circular(16),
+              //   ),
+              //   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              //   child: Text(
+              //     widget.connected ? '🟢 Connected' : '🔴 Disconnected',
+              //     style: TextStyle(
+              //       color: widget.connected
+              //           ? const Color(0xFF155724)
+              //           : const Color(0xFF721C24),
+              //       fontWeight: FontWeight.bold,
+              //       fontSize: 12,
+              //     ),
+              //   ),
+              // ),
               const SizedBox(width: 16),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
