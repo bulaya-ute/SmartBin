@@ -48,7 +48,9 @@ class Engine {
         print("Initialization success");
       } else {
         isInitialized = false;
-        print("Error: Initialization failed. Ready status not received from backend");
+        print(
+          "Error: Initialization failed. Ready status not received from backend",
+        );
         await _cleanup();
       }
     } catch (e) {
@@ -67,21 +69,21 @@ class Engine {
         .transform(utf8.decoder)
         .transform(LineSplitter())
         .listen(
-      (line) {
-        final trimmed = line.trim();
-        if (trimmed.isNotEmpty) {
-          _responseController!.add(trimmed);
-        }
-      },
-      onError: (error) {
-        print("Stream error: $error");
-        _responseController!.addError(error);
-      },
-      onDone: () {
-        print("Python process stdout closed");
-        _responseController!.close();
-      },
-    );
+          (line) {
+            final trimmed = line.trim();
+            if (trimmed.isNotEmpty) {
+              _responseController!.add(trimmed);
+            }
+          },
+          onError: (error) {
+            print("Stream error: $error");
+            _responseController!.addError(error);
+          },
+          onDone: () {
+            print("Python process stdout closed");
+            _responseController!.close();
+          },
+        );
   }
 
   /// Waits for a non-empty response from the Python process within the specified timeout.
@@ -105,7 +107,10 @@ class Engine {
   }
 
   /// Send a command to the engine
-  static Future<String?> sendCommand(String command, {Duration timeout = const Duration(seconds: 5)}) async {
+  static Future<String?> sendCommand(
+    String command, {
+    Duration timeout = const Duration(seconds: 5),
+  }) async {
     if (!isInitialized) {
       print("Error: Engine not initialized.");
       return null;
@@ -115,7 +120,7 @@ class Engine {
       // Send the command
       process!.stdin.writeln(command);
       await process!.stdin.flush();
-      
+
       print("→ $command");
 
       // Wait for response
@@ -158,6 +163,12 @@ class Engine {
   }
 
   static void print(String message) {
-    debugPrint("[ENGINE] $message");
+    // Regex matches --sudo <password> or --sudo=<password>
+    final sudoRegex = RegExp(r'(--sudo(?:=|\s+))([^\s]+)');
+    final obscured = message.replaceAllMapped(
+      sudoRegex,
+      (match) => '${match[1]}${'*' * match[2]!.length}',
+    );
+    debugPrint("[ENGINE] $obscured");
   }
 }

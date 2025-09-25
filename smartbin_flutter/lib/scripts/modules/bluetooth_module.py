@@ -19,9 +19,10 @@ class BluetoothModule:
     _reader_thread = None
     _buffer = []
     _sudo_password = None
+    _stored_mac = "EC:E3:34:15:F2:62"
 
     # Configuration
-    _esp32_mac = "EC:E3:34:15:F2:62"
+    # _esp32_mac = "EC:E3:34:15:F2:62"
     _rfcomm_device = "/dev/rfcomm0"
     _baudrate = 115200
 
@@ -33,7 +34,6 @@ class BluetoothModule:
 
     @staticmethod
     def handle_command(args: list):
-        """Handle bluetooth commands"""
         if not args:
             print("Error: No bluetooth subcommand provided")
             return
@@ -42,11 +42,42 @@ class BluetoothModule:
 
         if subcommand == 'init':
             sudo_password = args[1] if len(args) > 1 else None
+            if sudo_password:
+                BluetoothModule._sudo_password = sudo_password
             BluetoothModule.init(sudo_password)
 
         elif subcommand == 'connect':
-            mac_address = args[1] if len(args) > 1 else None
-            BluetoothModule.connect(mac_address)
+            mac_address = None
+            sudo_password = None
+            i = 1
+            while i < len(args):
+                if args[i] == '--mac' and i + 1 < len(args):
+                    mac_address = args[i + 1]
+                    i += 2
+                elif args[i] == '--sudo' and i + 1 < len(args):
+                    sudo_password = args[i + 1]
+                    i += 2
+                else:
+                    i += 1
+
+            # Store if provided
+            if mac_address:
+                BluetoothModule._stored_mac = mac_address
+            if sudo_password:
+                BluetoothModule._sudo_password = sudo_password
+
+            # Use stored values if not provided
+            mac = mac_address or BluetoothModule._stored_mac
+            sudo = sudo_password or BluetoothModule._sudo_password
+
+            if not mac:
+                print("Error: MAC address is required for bluetooth connect")
+                return
+            if not sudo:
+                print("Error: Sudo password is required for bluetooth connect")
+                return
+
+            BluetoothModule.connect(mac, sudo)
 
         elif subcommand == 'disconnect':
             BluetoothModule.disconnect()
@@ -123,7 +154,7 @@ class BluetoothModule:
             return False
 
     @staticmethod
-    def connect(mac_address: str = None) -> bool:
+    def connect(mac_address: str, sudo_password: str) -> bool:
         """Connect to ESP32 via bluetooth"""
         if not BluetoothModule._initialized:
             print("Error: Bluetooth module not initialized")
@@ -133,21 +164,25 @@ class BluetoothModule:
             print("Already connected to ESP32")
             return True
 
-        # Use provided mac address or default
-        target_mac = mac_address if mac_address else BluetoothModule._esp32_mac
+        if not mac_address:
+            print("Error: --mac argument is required for bluetooth connect")
+            return False
+        if not sudo_password:
+            print("Error: --sudo argument is required for bluetooth connect")
+            return False
 
         try:
-            print(f"Connecting to ESP32 at {target_mac}...")
+            print(f"Connecting to ESP32 at {mac_address}...")
 
             # Setup RFCOMM binding
-            if not BluetoothModule._setup_rfcomm_binding(target_mac, BluetoothModule._sudo_password):
+            if not BluetoothModule._setup_rfcomm_binding(mac_address, sudo_password):
                 print("Error: Failed to setup RFCOMM binding")
                 return False
 
             # Setup serial connection
             if not BluetoothModule._setup_serial():
                 print("Error: Failed to setup serial connection")
-                BluetoothModule._cleanup_rfcomm_binding(BluetoothModule._sudo_password)
+                BluetoothModule._cleanup_rfcomm_binding(sudo_password)
                 return False
 
             # Start the communication

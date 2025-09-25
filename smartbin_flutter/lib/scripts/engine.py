@@ -21,7 +21,7 @@ class SmartBinEngine:
             BluetoothModule.stop()
 
         # Stop classification if running
-        if ClassificationModule.is_initialized():
+        if ClassificationModule.is_initialized:
             ClassificationModule.stop()
 
         print("✅ Engine stopped and resources freed")
