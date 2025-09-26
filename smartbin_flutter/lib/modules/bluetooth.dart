@@ -1,10 +1,10 @@
 import 'package:flutter/cupertino.dart';
 import 'package:smartbin_flutter/modules/base_module.dart';
 import 'package:smartbin_flutter/modules/engine.dart';
+import 'package:smartbin_flutter/modules/security.dart';
 
 class Bluetooth extends BaseModule {
   static bool _isInitialized = false;
-  static String? sudoPassword;
   static String? rfcommBinding;
 
   static bool get isInitialized {
@@ -54,7 +54,7 @@ class Bluetooth extends BaseModule {
     try {
       // Send connect command to Python backend
       String? connectResponse = await Engine.sendCommand(
-        "bluetooth connect $macAddress",
+        "bluetooth connect --mac $macAddress --sudo ${Security.sudoPassword}",
         timeout: Duration(seconds: 15),
       );
 
@@ -62,19 +62,19 @@ class Bluetooth extends BaseModule {
         error("Connection failed: No response from backend");
         return;
       }
-      print("Connected response $connectResponse");
+      // print("Connected response $connectResponse");
 
       // Check for connection progress messages
       if (connectResponse.toLowerCase().contains("connecting to esp32")) {
         print("Backend is attempting connection...");
 
         // Wait for additional responses about RFCOMM binding
-        String? rfcommResponse = await Engine.sendCommand(
-          "bluetooth connect ",
-          timeout: Duration(seconds: 10),
+        String? rfcommResponse = await Engine.waitForResponse(
+          Duration(seconds: 10),
         );
-        if (rfcommResponse != null &&
-            rfcommResponse.toLowerCase().startsWith("info: rfcomm bound to")) {
+        if (rfcommResponse != null // &&
+           // rfcommResponse.toLowerCase().startsWith("info: rfcomm bound to")
+        ) {
           rfcommBinding = rfcommResponse
               .substring("info: rfcomm bound to ".length)
               .trim();

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:encrypt/encrypt.dart' as encrypt;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:device_info_plus/device_info_plus.dart';
@@ -11,8 +12,41 @@ class Security extends BaseModule {
   static const _passwordKey = 'sudo_password_encrypted';
   static String? _sudoPassword;
 
-  // Public getter for the sudo password (returns null if not available)
-  static String? get sudoPassword => _sudoPassword;
+  static String? get sudoPassword {
+    return _sudoPassword;
+  }
+
+  static set sudoPassword(String? value) {
+    _sudoPassword = value;
+  }
+
+  /// Checks if the stored sudo password is valid, when no argument is provided.
+  /// Checks if the argument is the correct sudo password if provided.
+  static Future<bool> validateSudo([String? sudo]) async {
+    String? passwordToCheck = sudo ?? sudoPassword;
+    if (passwordToCheck == null) {
+      return false;
+    }
+
+    try {
+      final process = await Process.start(
+        'sudo',
+        ['-S', '-k', 'true'],
+        runInShell: true,
+        environment: Platform.environment,
+        workingDirectory: Directory.current.path,
+      );
+      // Write password to stdin
+      process.stdin.writeln(passwordToCheck);
+      await process.stdin.flush();
+      await process.stdin.close();
+
+      final exitCode = await process.exitCode;
+      return exitCode == 0;
+    } catch (_) {
+      return false;
+    }
+  }
 
   // Initialization method to be called during app startup
   static Future<void> init(BuildContext context) async {

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/cupertino.dart';
@@ -9,11 +10,13 @@ class Engine {
   static bool _isInitialized = false;
   static Process? process;
   static String engineScript = "lib/scripts/engine.py";
+  static String pythonExecutable = "lib/scripts/.venv/bin/activate";
 
   // Stream management
   static StreamSubscription? _stdoutSubscription;
   static StreamController<String>? _responseController;
   static Stream<String>? _responseStream;
+  static final Queue<String> _lineBuffer = Queue<String>();
 
   static bool get isInitialized {
     if (!_isInitialized) {
@@ -28,6 +31,34 @@ class Engine {
     _isInitialized = value;
   }
 
+
+  // Modify _setupStreamListener to add lines to the buffer
+  static void _setupStreamListener() {
+    _responseController = StreamController<String>.broadcast();
+    _responseStream = _responseController!.stream;
+
+    _stdoutSubscription = process!.stdout
+        .transform(utf8.decoder)
+        .transform(LineSplitter())
+        .listen(
+          (line) {
+            final trimmed = line.trim();
+            if (trimmed.isNotEmpty) {
+              _lineBuffer.add(trimmed); // Buffer the line
+              _responseController!.add(trimmed);
+            }
+          },
+          onError: (error) {
+            print("Stream error: $error");
+            _responseController!.addError(error);
+          },
+          onDone: () {
+            print("Python process stdout closed");
+            _responseController!.close();
+          },
+        );
+  }
+
   /// Initialization method. Establishes communication with the python API
   static Future<void> init() async {
     if (isInitialized) {
@@ -37,7 +68,7 @@ class Engine {
 
     print("Starting engine");
     try {
-      process = await Process.start('python', [engineScript, "start"]);
+      process = await Process.start(pythonExecutable, [engineScript, "start"]);
 
       // Set up single persistent stream listener
       _setupStreamListener();
@@ -54,56 +85,18 @@ class Engine {
         await _cleanup();
       }
     } catch (e) {
-      print("Error during initialization: $e");
+      error("Engine initialization failed: $e");
       isInitialized = false;
       await _cleanup();
     }
   }
 
-  /// Set up a single persistent listener that broadcasts to multiple waiters
-  static void _setupStreamListener() {
-    _responseController = StreamController<String>.broadcast();
-    _responseStream = _responseController!.stream;
-
-    _stdoutSubscription = process!.stdout
-        .transform(utf8.decoder)
-        .transform(LineSplitter())
-        .listen(
-          (line) {
-            final trimmed = line.trim();
-            if (trimmed.isNotEmpty) {
-              _responseController!.add(trimmed);
-            }
-          },
-          onError: (error) {
-            print("Stream error: $error");
-            _responseController!.addError(error);
-          },
-          onDone: () {
-            print("Python process stdout closed");
-            _responseController!.close();
-          },
-        );
-  }
-
   /// Waits for a non-empty response from the Python process within the specified timeout.
   static Future<String?> waitForResponse(Duration timeout) async {
-    if (_responseStream == null) {
-      print("Error: Response stream not available");
-      return null;
-    }
-
-    try {
-      final response = await _responseStream!.first.timeout(timeout);
-      print("← $response");
-      return response;
-    } on TimeoutException {
-      print("Timeout waiting for response after ${timeout.inSeconds} seconds");
-      return null;
-    } catch (e) {
-      print("Error waiting for response: $e");
-      return null;
-    }
+  if (_lineBuffer.isNotEmpty) {
+    return _lineBuffer.removeFirst();
+  }
+  return null;
   }
 
   /// Send a command to the engine
@@ -171,4 +164,10 @@ class Engine {
     );
     debugPrint("[ENGINE] $obscured");
   }
+
+  static void error(String description, {bool throwError = true}) {
+    debugPrint("[ENGINE] ⚠️ $description");
+    if (throwError) throw Exception(description);
+  }
+
 }
