@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/cupertino.dart';
 import 'package:smartbin_flutter/modules/base_module.dart';
 import 'package:smartbin_flutter/modules/engine.dart';
@@ -167,9 +169,10 @@ class Bluetooth extends BaseModule {
   }
 
   /// Read bluetooth buffer
-  static Future<String?> readBuffer() async {
+  static Future<List<String>?> readBuffer() async {
     String? response = await Engine.sendCommand("bluetooth get buffer");
-    return response;
+    if (response == null) return [];
+    return jsonDecode(response);
   }
 
   static void print(String message) {
@@ -177,7 +180,7 @@ class Bluetooth extends BaseModule {
   }
 
   static void error(String description, {bool throwError = true}) {
-    debugPrint("[BLUETOOTH ⚠️] $description");
+    debugPrint("[BLUETOOTH] ⚠️ $description");
     if (throwError) throw Exception(description);
   }
 }

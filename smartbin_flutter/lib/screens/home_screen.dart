@@ -23,6 +23,8 @@ class HomeScreen extends StatefulWidget {
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
+
+
 }
 
 class _HomeScreenState extends State<HomeScreen> {
@@ -100,16 +102,16 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _startBufferReading() {
-    _bufferReadTimer = Timer.periodic(Duration(milliseconds: 500), (timer) async {
+    _bufferReadTimer = Timer.periodic(Duration(milliseconds: 100), (timer) async {
       if (isConnected) {
         try {
-          String? buffer = await Bluetooth.readBuffer();
-          if (buffer != null && buffer.isNotEmpty) {
-            // Split multiple messages
-            final messages = buffer.split('\n').where((msg) => msg.trim().isNotEmpty);
-            for (String message in messages) {
-              _processReceivedMessage(message.trim());
-            }
+          List<String>? buffer = await Bluetooth.readBuffer();
+          if (buffer == null) return;
+          for (String line in buffer) {
+            line = line.trim();
+            if (line.trim().isEmpty) continue;
+
+            _appendLogMessage(line);
           }
         } catch (e) {
           // Silently handle buffer read errors to avoid spam
@@ -118,25 +120,21 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  void _processReceivedMessage(String message) {
+  void _appendLogMessage(String message) {
     Color messageColor = Colors.grey;
 
     // Format PA/PX messages in yellow
     if (message.startsWith('PA') || message.startsWith('PX')) {
       messageColor = Colors.yellow;
-      _addLogMessage('← $message', messageColor);
     } else if (message.startsWith('ERROR:')) {
       messageColor = Colors.red;
-      _addLogMessage('← $message', messageColor);
     } else if (message.startsWith('IMAGE_RECEIVED:')) {
       messageColor = Colors.green;
-      _addLogMessage('← Image received from ESP32', messageColor);
       // Extract image path and potentially trigger classification
       final imagePath = message.substring('IMAGE_RECEIVED:'.length).trim();
       _triggerClassification(imagePath);
-    } else {
-      _addLogMessage('← $message', messageColor);
-    }
+    } 
+    _addLogMessage(message, messageColor);
   }
 
   Future<void> _triggerClassification(String imagePath) async {
