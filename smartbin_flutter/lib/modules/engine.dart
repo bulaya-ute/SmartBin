@@ -116,7 +116,9 @@ class Engine {
       // Sleep briefly to avoid busy-waiting
       await Future.delayed(const Duration(milliseconds: 10));
     }
-    return _lineBuffer.removeFirst();
+    String line = _lineBuffer.removeFirst();
+    print("← $line");
+    return line;
   }
 
   /// Send a command to the engine
@@ -135,6 +137,7 @@ class Engine {
       await process!.stdin.flush();
 
       print("→ $command");
+
 
       // Wait for response
       return await waitForResponse(timeout);

@@ -6,6 +6,7 @@ import 'package:smartbin_flutter/modules/security.dart';
 class Bluetooth extends BaseModule {
   static bool _isInitialized = false;
   static String? rfcommBinding;
+  static String? serialPort;
 
   static bool get isInitialized {
     if (!_isInitialized) {
@@ -43,7 +44,10 @@ class Bluetooth extends BaseModule {
     }
   }
 
-  static Future<void> connect({String macAddress = "EC:E3:34:15:F2:62", String? sudoPassword}) async {
+  static Future<void> connect({
+    String macAddress = "EC:E3:34:15:F2:62",
+    String? sudoPassword,
+  }) async {
     if (!isInitialized) {
       error("Cannot connect: Bluetooth module not initialized");
       return;
@@ -53,32 +57,52 @@ class Bluetooth extends BaseModule {
 
     try {
       // Send connect command to Python backend
-      String? connectResponse = await Engine.sendCommand(
+      String? response = await Engine.sendCommand(
         "bluetooth connect --mac $macAddress --sudo ${Security.sudoPassword}",
         timeout: Duration(seconds: 15),
       );
 
-      if (connectResponse == null) {
+      if (response == null) {
         error("Connection failed: No response from backend");
         return;
       }
-      // print("Connected response $connectResponse");
 
       // Check for connection progress messages
-      if (connectResponse.toLowerCase().contains("connecting to esp32")) {
+      if (response.toLowerCase().contains("connecting to esp32")) {
         print("Backend is attempting connection...");
 
+        // Update the response
+        response = await Engine.waitForResponse(Duration(seconds: 10));
+        if (response == null) {
+          error("Error: Timeout waiting for response");
+          return;
+        }
+
+        // Handle message for opening serial port
+        if (response.toLowerCase().contains("opening serial")) {
+          serialPort = response.substring(15, response.length + 1);
+          print("Opening serial: $serialPort");
+          response = await Engine.waitForResponse(Duration(seconds: 15));
+        }
+
+        // Update the response
+        response = await Engine.waitForResponse(Duration(seconds: 10));
+        if (response == null) {
+          error("Error: Could not open serial to $serialPort");
+          return;
+        }
+
         // Wait for additional responses about RFCOMM binding
-        String? rfcommResponse = await Engine.waitForResponse(
-          Duration(seconds: 10),
-        );
-        if (rfcommResponse != null // &&
-           // rfcommResponse.toLowerCase().startsWith("info: rfcomm bound to")
-        ) {
-          rfcommBinding = rfcommResponse
-              .substring("info: rfcomm bound to ".length)
-              .trim();
-          print("RFCOMM bound to $rfcommBinding");
+        rfcommBinding = response
+            .substring("info: rfcomm bound to ".length)
+            .trim();
+        print("RFCOMM bound to $rfcommBinding");
+
+        // Update the response
+        response = await Engine.waitForResponse(Duration(seconds: 10));
+        if (response == null) {
+          error("Error: Did not get expected success message");
+          return;
         }
 
         // Wait for final success message
@@ -101,14 +125,14 @@ class Bluetooth extends BaseModule {
             "Connection failed: Expected success confirmation not received. Got: $finalResponse",
           );
         }
-      } else if (connectResponse.toLowerCase().contains("already connected")) {
+      } else if (response.toLowerCase().contains("already connected")) {
         print("Already connected.");
-      } else if (connectResponse.toLowerCase().startsWith("error:")) {
-        error("Connection failed: $connectResponse");
-      } else if (connectResponse.toLowerCase().trim() == "success") {
+      } else if (response.toLowerCase().startsWith("error:")) {
+        error("Connection failed: $response");
+      } else if (response.toLowerCase().trim() == "success") {
         print("Connection established successfully");
       } else {
-        error("Unexpected connection response: $connectResponse");
+        error("Unexpected connection response: $response");
       }
     } catch (e) {
       error("Connection failed with exception: $e");

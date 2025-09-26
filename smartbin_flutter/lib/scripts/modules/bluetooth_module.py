@@ -167,6 +167,7 @@ class BluetoothModule:
         if not mac_address:
             print("Error: --mac argument is required for bluetooth connect")
             return False
+
         if not sudo_password:
             print("Error: --sudo argument is required for bluetooth connect")
             return False
@@ -336,7 +337,7 @@ class BluetoothModule:
     def _setup_serial() -> bool:
         """Setup serial connection"""
         try:
-            print(f"📡 Opening serial {BluetoothModule._rfcomm_device}...")
+            print(f"Opening serial {BluetoothModule._rfcomm_device}...")
             BluetoothModule._ser = serial.Serial(
                 port=BluetoothModule._rfcomm_device,
                 baudrate=BluetoothModule._baudrate,
@@ -366,7 +367,7 @@ class BluetoothModule:
     @staticmethod
     def _bluetooth_reader_loop():
         """Main bluetooth reader loop - runs in separate thread"""
-        print("📖 Bluetooth reader active")
+        print("Bluetooth reader active")
         while BluetoothModule._running and BluetoothModule._ser and BluetoothModule._ser.is_open:
             try:
                 if BluetoothModule._ser.in_waiting > 0:
@@ -379,7 +380,7 @@ class BluetoothModule:
                 if BluetoothModule._running:
                     print(f"❌ Bluetooth reader error: {e}")
                 break
-        print("📖 Bluetooth reader stopped. Disconnecting bluetooth...")
+        print("Bluetooth reader stopped. Disconnecting bluetooth...")
         threading.Thread(target=BluetoothModule.disconnect, args=[]).start()
 
 
