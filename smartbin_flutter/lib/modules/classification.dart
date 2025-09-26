@@ -16,17 +16,15 @@ class Classification {
       return;
     }
     print("Initializing classification...");
-    String? response = await Engine.sendCommand("classify init");
+    String? response = await Engine.sendCommand("classify init", timeout: Duration(seconds: 30));
     // print("DEBUG $response");
     if (response == null) {
       error("Initialization failed. Null message received");
     } else if (response.toLowerCase() == "success") {
       print("Module initialized successfully.");
-    } else if (response.toLowerCase().contains("using mock classification")) {
-      print("Module initialized successfully (mock classification).");
-    } else {
+    }  else {
       print(
-        "Error initializing classification module. Success message not received",
+        "Error initializing classification module. Success message not received. Got: $response",
       );
       throw Exception(
         "Error initializing classification module. Success message not received",

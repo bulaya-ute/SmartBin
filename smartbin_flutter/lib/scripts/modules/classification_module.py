@@ -3,7 +3,9 @@
 import random
 from typing import Dict, Any, Optional
 import json
-YOLO = None
+import os
+
+YOLO: Any = None
 
 class ClassificationModule:
     """Classification module with static methods and fields"""
@@ -61,24 +63,19 @@ class ClassificationModule:
             # Lazy import of heavy libraries only when needed
             try:
                 global YOLO
-                from ultralytics import YOLO
-                print("✅ YOLO imported successfully")
+                if YOLO is None:
+                    from ultralytics import YOLO
 
-                # TODO: Replace with actual model loading
-                # ClassificationModule._model = YOLO('yolo11n-cls.pt')
-                # print("✅ YOLO model loaded")
+                # // Load model
+                model_path = os.path.abspath('classifier_model_yolo.pt')
+                ClassificationModule._model = YOLO(model_path)
 
-                # For now, just set a placeholder
-                ClassificationModule.model = "mock_model"
-
-            except ImportError as e:
-                print(f"Error: {e}. Using mock classification.")
-                ClassificationModule.model = "mock_model"
             except Exception as e:
-                print(f"⚠️ Model loading failed: {e}. Using mock classification.")
-                ClassificationModule.model = "mock_model"
+                print(f"⚠️ Model loading failed: {e}. ")
+                return False
 
-            ClassificationModule._initialized = True
+            ClassificationModule.is_initialized = True
+            print("Success - classification initialized.")
             return True
 
         except Exception as e:
@@ -124,7 +121,7 @@ class ClassificationModule:
                 print("✅ Classification model freed from memory")
 
             ClassificationModule.model = None
-            ClassificationModule._initialized = False
+            ClassificationModule.is_initialized = False
 
         except Exception as e:
             print(f"⚠️ Classification cleanup warning: {e}")

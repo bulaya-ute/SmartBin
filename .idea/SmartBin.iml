@@ -42,8 +42,9 @@
       <excludeFolder url="file://$MODULE_DIR$/smartbin_flutter/windows/flutter/ephemeral/.plugin_symlinks/shared_preferences_windows/example/.dart_tool" />
       <excludeFolder url="file://$MODULE_DIR$/smartbin_flutter/windows/flutter/ephemeral/.plugin_symlinks/shared_preferences_windows/example/.pub" />
       <excludeFolder url="file://$MODULE_DIR$/smartbin_flutter/windows/flutter/ephemeral/.plugin_symlinks/shared_preferences_windows/example/build" />
+      <excludeFolder url="file://$MODULE_DIR$/smartbin_flutter/lib/scripts/.venv" />
     </content>
-    <orderEntry type="jdk" jdkName="Python 3.13 (SmartBin)" jdkType="Python SDK" />
+    <orderEntry type="jdk" jdkName="Python 3.13 virtualenv at ~/PycharmProjects/SmartBin/smartbin_flutter/lib/scripts/.venv" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
     <orderEntry type="library" name="Dart SDK" level="project" />
     <orderEntry type="library" name="Dart Packages" level="project" />

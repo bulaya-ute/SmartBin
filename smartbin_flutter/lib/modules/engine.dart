@@ -10,25 +10,27 @@ import 'package:path/path.dart' as p;
 class Engine {
   static bool _isInitialized = false;
   static Process? process;
-  static String projectRootDir = p.join(
+  static String workingDir = p.join(
     File(Platform.script.toFilePath()).parent.path,
-    // "lib",
-    // "scripts",
-  );
-  static String pythonExecutable = p.join(
-    projectRootDir,
     "lib",
     "scripts",
-    ".venv",
-    "bin",
-    "python",
   );
-  static String engineScript = p.join(
-    projectRootDir,
-    "lib",
-    "scripts",
-    "engine.py",
-  );
+  static String pythonExecutablePath = p.join(workingDir, ".venv/bin/python");
+  static String engineScriptPath = p.join(workingDir, "engine.py");
+  // static String pythonExecutable = p.join(
+  //   projectRootDir,
+  //   "lib",
+  //   "scripts",
+  //   ".venv",
+  //   "bin",
+  //   "python",
+  // );
+  // static String engineScript = p.join(
+  //   projectRootDir,
+  //   "lib",
+  //   "scripts",
+  //   "engine.py",
+  // );
 
   // Stream management
   static StreamSubscription? _stdoutSubscription;
@@ -43,14 +45,14 @@ class Engine {
       return;
     }
 
-    print("Starting engine... Working dir: $projectRootDir \n"
-        "Python executable: $pythonExecutable \n"
-        "Python script: $engineScript");
+    print("Starting engine... Working dir: $workingDir \n"
+        "Python executable: $pythonExecutablePath \n"
+        "Python script: $engineScriptPath");
     try {
       process = await Process.start(
-          "python3",
+          pythonExecutablePath,
           [
-            "lib/scripts/engine.py",
+            engineScriptPath,
             "start",
           ]);
 
