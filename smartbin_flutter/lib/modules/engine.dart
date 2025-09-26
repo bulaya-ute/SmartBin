@@ -17,20 +17,6 @@ class Engine {
   );
   static String pythonExecutablePath = p.join(workingDir, ".venv/bin/python");
   static String engineScriptPath = p.join(workingDir, "engine.py");
-  // static String pythonExecutable = p.join(
-  //   projectRootDir,
-  //   "lib",
-  //   "scripts",
-  //   ".venv",
-  //   "bin",
-  //   "python",
-  // );
-  // static String engineScript = p.join(
-  //   projectRootDir,
-  //   "lib",
-  //   "scripts",
-  //   "engine.py",
-  // );
 
   // Stream management
   static StreamSubscription? _stdoutSubscription;
@@ -54,7 +40,9 @@ class Engine {
           [
             engineScriptPath,
             "start",
-          ]);
+          ],
+        workingDirectory: workingDir
+      );
 
       // Set up single persistent stream listener
       _setupStreamListener();

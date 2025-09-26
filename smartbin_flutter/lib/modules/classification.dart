@@ -20,7 +20,7 @@ class Classification {
     // print("DEBUG $response");
     if (response == null) {
       error("Initialization failed. Null message received");
-    } else if (response.toLowerCase() == "success") {
+    } else if (response.toLowerCase().startsWith("success")) {
       print("Module initialized successfully.");
     }  else {
       print(
