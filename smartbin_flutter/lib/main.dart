@@ -1,4 +1,3 @@
-// Copilot: Unique comment for verification - Security module integration planned here.
 import 'package:flutter/material.dart';
 import 'package:smartbin_flutter/modules/bluetooth.dart';
 import 'package:smartbin_flutter/modules/config.dart';
@@ -92,42 +91,46 @@ class _StartupEntryState extends State<StartupEntry> {
             //   child: const Text('Cancel'),
             // ),
             ElevatedButton(
-              onPressed: isLoading ? null : () async {
-                setState(() {
-                  isLoading = true;
-                });
+              onPressed: isLoading
+                  ? null
+                  : () async {
+                      setState(() {
+                        isLoading = true;
+                      });
 
-                // Inform the user that the password is incorrect, if it is
-                if (!await Security.validateSudo(controller.text)) {
-                  incorrectEntry = true;
-                  // ScaffoldMessenger.of(context).showSnackBar(
-                  //   SnackBar(
-                  //     backgroundColor: Colors.red,
-                  //     content: Text(
-                  //       "Incorrect password",
-                  //       style: TextStyle(color: Colors.white),
-                  //     ),
-                  //   ),
-                  // );
+                      // Inform the user that the password is incorrect, if it is
+                      if (!await Security.validateSudo(controller.text)) {
+                        incorrectEntry = true;
+                        // ScaffoldMessenger.of(context).showSnackBar(
+                        //   SnackBar(
+                        //     backgroundColor: Colors.red,
+                        //     content: Text(
+                        //       "Incorrect password",
+                        //       style: TextStyle(color: Colors.white),
+                        //     ),
+                        //   ),
+                        // );
 
-                  setState(() {
-                    isLoading = false;
-                  });
-                  return;
-                }
+                        setState(() {
+                          isLoading = false;
+                        });
+                        return;
+                      }
 
-                // Save the password
-                Security.sudoPassword = controller.text;
+                      // Save the password
+                      Security.sudoPassword = controller.text;
 
-                if (mounted) {
-                  Navigator.of(context).pop(controller.text);
-                }
+                      if (mounted) {
+                        Navigator.of(context).pop(controller.text);
+                      }
 
-                setState(() {
-                  isLoading = false;
-                });
-              },
-              child: isLoading ? const Text("Checking...") : const Text('Continue'),
+                      setState(() {
+                        isLoading = false;
+                      });
+                    },
+              child: isLoading
+                  ? const Text("Checking...")
+                  : const Text('Continue'),
             ),
           ],
         );

@@ -3,20 +3,77 @@ import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/cupertino.dart';
+import 'package:path/path.dart' as p;
 
 /// Responsible for communication with python backend, which is used for
 /// running classification model and bluetooth communication
 class Engine {
   static bool _isInitialized = false;
   static Process? process;
-  static String engineScript = "lib/scripts/engine.py";
-  static String pythonExecutable = "lib/scripts/.venv/bin/activate";
+  static String projectRootDir = p.join(
+    File(Platform.script.toFilePath()).parent.path,
+    // "lib",
+    // "scripts",
+  );
+  static String pythonExecutable = p.join(
+    projectRootDir,
+    "lib",
+    "scripts",
+    ".venv",
+    "bin",
+    "python",
+  );
+  static String engineScript = p.join(
+    projectRootDir,
+    "lib",
+    "scripts",
+    "engine.py",
+  );
 
   // Stream management
   static StreamSubscription? _stdoutSubscription;
   static StreamController<String>? _responseController;
   static Stream<String>? _responseStream;
   static final Queue<String> _lineBuffer = Queue<String>();
+
+  /// Initialization method. Establishes communication with the python API
+  static Future<void> init() async {
+    if (isInitialized) {
+      print("Initialization cancelled. Module is already initialized");
+      return;
+    }
+
+    print("Starting engine... Working dir: $projectRootDir \n"
+        "Python executable: $pythonExecutable \n"
+        "Python script: $engineScript");
+    try {
+      process = await Process.start(
+          "python3",
+          [
+            "lib/scripts/engine.py",
+            "start",
+          ]);
+
+      // Set up single persistent stream listener
+      _setupStreamListener();
+
+      String? response = await waitForResponse(Duration(seconds: 30));
+      if (response?.toLowerCase() == "ready") {
+        isInitialized = true;
+        print("Initialization success");
+      } else {
+        isInitialized = false;
+        await _cleanup();
+        throw Exception(
+          "Error: Initialization failed. Ready status not received from backend",
+        );
+      }
+    } catch (e) {
+      error("Engine initialization failed: $e");
+      isInitialized = false;
+      await _cleanup();
+    }
+  }
 
   static bool get isInitialized {
     if (!_isInitialized) {
@@ -30,7 +87,6 @@ class Engine {
   static set isInitialized(bool value) {
     _isInitialized = value;
   }
-
 
   // Modify _setupStreamListener to add lines to the buffer
   static void _setupStreamListener() {
@@ -59,44 +115,18 @@ class Engine {
         );
   }
 
-  /// Initialization method. Establishes communication with the python API
-  static Future<void> init() async {
-    if (isInitialized) {
-      print("Initialization cancelled. Module is already initialized");
-      return;
-    }
 
-    print("Starting engine");
-    try {
-      process = await Process.start(pythonExecutable, [engineScript, "start"]);
-
-      // Set up single persistent stream listener
-      _setupStreamListener();
-
-      String? response = await waitForResponse(Duration(seconds: 30));
-      if (response?.toLowerCase() == "ready") {
-        isInitialized = true;
-        print("Initialization success");
-      } else {
-        isInitialized = false;
-        print(
-          "Error: Initialization failed. Ready status not received from backend",
-        );
-        await _cleanup();
-      }
-    } catch (e) {
-      error("Engine initialization failed: $e");
-      isInitialized = false;
-      await _cleanup();
-    }
-  }
-
-  /// Waits for a non-empty response from the Python process within the specified timeout.
   static Future<String?> waitForResponse(Duration timeout) async {
-  if (_lineBuffer.isNotEmpty) {
+    final start = DateTime.now();
+    while (_lineBuffer.isEmpty) {
+      final elapsed = DateTime.now().difference(start);
+      if (elapsed >= timeout) {
+        return null;
+      }
+      // Sleep briefly to avoid busy-waiting
+      await Future.delayed(const Duration(milliseconds: 10));
+    }
     return _lineBuffer.removeFirst();
-  }
-  return null;
   }
 
   /// Send a command to the engine
@@ -169,5 +199,4 @@ class Engine {
     debugPrint("[ENGINE] ⚠️ $description");
     if (throwError) throw Exception(description);
   }
-
 }
