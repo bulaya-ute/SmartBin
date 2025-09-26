@@ -128,9 +128,9 @@ class SmartBinPySerialProtocol:
             self.ser.flushInput()
             self.ser.flushOutput()
             
-            print(f"✅ PySerial connection established")
-            print(f"📊 Port: {self.ser.port}, Baudrate: {self.ser.baudrate}")
-            print(f"🔧 Timeout: {self.ser.timeout}s, Write timeout: {self.ser.write_timeout}s")
+            print(f"PySerial connection established")
+            print(f"Port: {self.ser.port}, Baudrate: {self.ser.baudrate}")
+            print(f"Timeout: {self.ser.timeout}s, Write timeout: {self.ser.write_timeout}s")
             
             return True
             

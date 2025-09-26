@@ -101,30 +101,38 @@ class Bluetooth extends BaseModule {
         // Update the response
         response = await Engine.waitForResponse(Duration(seconds: 10));
         if (response == null) {
-          error("Error: Did not get expected success message");
+          error("Error: Error trying to get config");
           return;
         }
 
-        // Wait for final success message
-        String? finalResponse = await Engine.waitForResponse(
-          Duration(seconds: 10),
-        );
-        if (finalResponse != null &&
-            finalResponse.toLowerCase().contains("successfully connected")) {
+        // Get configuration information
+        if (response.toLowerCase().contains("serial connection established")) {
+          String? configData1 = await Engine.waitForResponse();
+          String? configData2 = await Engine.waitForResponse();
           print("Successfully connected to ESP32");
 
-          // Wait for the "success" confirmation
-          String? successResponse = await Engine.waitForResponse(
-            Duration(seconds: 5),
-          );
-          if (successResponse?.toLowerCase().trim() == "success") {
-            print("Connection established successfully");
-          }
-        } else {
-          error(
-            "Connection failed: Expected success confirmation not received. Got: $finalResponse",
-          );
         }
+
+        // // Wait for final success message
+        // // String? response = await Engine.waitForResponse(
+        // //   Duration(seconds: 10),
+        // // );
+        // if (response.toLowerCase().contains("successfully connected")) {
+        //   print("Successfully connected to ESP32");
+        //
+        //   // Wait for the "success" confirmation
+        //   String? successResponse = await Engine.waitForResponse(
+        //     Duration(seconds: 5),
+        //   );
+        //   if (successResponse?.toLowerCase().trim() == "success") {
+        //     print("Connection established successfully");
+        //   }
+        // } else {
+        //   error(
+        //     "Connection failed: Expected success confirmation not received. Got: $response",
+        //   );
+        // }
+
       } else if (response.toLowerCase().contains("already connected")) {
         print("Already connected.");
       } else if (response.toLowerCase().startsWith("error:")) {

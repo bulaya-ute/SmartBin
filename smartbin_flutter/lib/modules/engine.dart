@@ -106,7 +106,7 @@ class Engine {
   }
 
 
-  static Future<String?> waitForResponse(Duration timeout) async {
+  static Future<String?> waitForResponse([Duration timeout = const Duration(seconds: 2)]) async {
     final start = DateTime.now();
     while (_lineBuffer.isEmpty) {
       final elapsed = DateTime.now().difference(start);

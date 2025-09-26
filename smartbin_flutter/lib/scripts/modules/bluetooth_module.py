@@ -367,7 +367,7 @@ class BluetoothModule:
     @staticmethod
     def _bluetooth_reader_loop():
         """Main bluetooth reader loop - runs in separate thread"""
-        print("Bluetooth reader active")
+        # print("Bluetooth reader active")
         while BluetoothModule._running and BluetoothModule._ser and BluetoothModule._ser.is_open:
             try:
                 if BluetoothModule._ser.in_waiting > 0:
