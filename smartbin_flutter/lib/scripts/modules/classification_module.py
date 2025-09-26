@@ -11,10 +11,10 @@ class ClassificationModule:
     """Classification module with static methods and fields"""
 
     is_initialized = False
-    model = None
+    model: Any = None
 
     # Known classes for classification
-    _classes = ['aluminium', 'plastic', 'paper', 'glass', 'organic', 'metal', 'cardboard']
+    known_classes = ['aluminium', 'carton', 'e_waste', 'glass', 'organic_waste', 'paper_and_cardboard', 'plastic', "textile", "wood"]
 
     @staticmethod
     def handle_command(args: list):
@@ -44,7 +44,7 @@ class ClassificationModule:
 
             result = ClassificationModule.classify(image_path)
             if result:
-                print(json.dumps(result))
+                print(f"Results: {json.dumps(result)}")
             else:
                 print(json.dumps({"error": "Classification failed"}))
 
@@ -68,7 +68,7 @@ class ClassificationModule:
 
                 # // Load model
                 model_path = os.path.abspath('classifier_model_yolo.pt')
-                ClassificationModule._model = YOLO(model_path)
+                ClassificationModule.model = YOLO(model_path)
 
             except Exception as e:
                 print(f"⚠️ Model loading failed: {e}. ")
@@ -94,7 +94,6 @@ class ClassificationModule:
             if not image_path:
                 return {"error": "No image path provided"}
 
-            # TODO: Replace with actual classification when model is loaded
             if ClassificationModule.model == "mock_model":
                 return ClassificationModule._mock_classify(image_path)
             else:
@@ -103,7 +102,7 @@ class ClassificationModule:
 
         except Exception as e:
             print(f"Error during classification: {e}")
-            return {"error": f"Classification failed: {str(e)}"}
+            return None
 
     @staticmethod
     def stop():
@@ -135,55 +134,52 @@ class ClassificationModule:
         print(f"🎭 Mock classifying: {image_path}")
 
         # Generate random weights
-        weights = [random.random() for _ in ClassificationModule._classes]
+        weights = [random.random() for _ in ClassificationModule.known_classes]
         total_weight = sum(weights)
 
         # Normalize to create confidence values
         confidences = {
             cls: round(weight / total_weight, 2)
-            for cls, weight in zip(ClassificationModule._classes, weights)
+            for cls, weight in zip(ClassificationModule.known_classes, weights)
         }
 
         return confidences
 
     @staticmethod
-    def _yolo_classify(image_path: str) -> Dict[str, Any]:
+    def _yolo_classify(image_path: str):
         """
         Perform actual YOLO classification
         """
-        try:
-            print(f"🔍 YOLO classifying: {image_path}")
+        image_path = os.path.abspath(image_path)
+        # print(f"Abs path: {image_path}")
+        model = ClassificationModule.model
+        if model is None:
+            print("Error: YOLO model not loaded")
+            return None
 
-            # TODO: Implement actual YOLO classification
-            # results = ClassificationModule._model(image_path)
-            #
-            # # Process results and convert to confidence dictionary
-            # confidences = {}
-            # for result in results:
-            #     probs = result.probs
-            #     for i, prob in enumerate(probs.data):
-            #         class_name = ClassificationModule._classes[i] if i < len(ClassificationModule._classes) else f"class_{i}"
-            #         confidences[class_name] = float(prob)
-            #
-            # return confidences
+        # Run inference
+        results = model.predict(image_path, verbose=False)
 
-            # For now, return mock data
-            return ClassificationModule._mock_classify(image_path)
+        class_names: dict[int, str] = results[0].names
+        probs = [round(float(i), 3) for i in list(results[0].probs.data)]
 
-        except Exception as e:
-            print(f"❌ YOLO classification error: {e}")
-            return {"error": f"YOLO classification failed: {str(e)}"}
+        class_confidences = {}
+
+        for class_index, class_name in class_names.items():
+            class_confidences[class_name] = probs[class_index]
+
+        return class_confidences
 
     @staticmethod
     def get_classes() -> list:
         """Get the list of supported classification classes"""
-        return ClassificationModule._classes.copy()
+        return ClassificationModule.known_classes.copy()
 
     @staticmethod
     def set_classes(classes: list):
         """Set the list of classification classes"""
-        ClassificationModule._classes = classes.copy()
-        print(f"✅ Classification classes updated: {ClassificationModule._classes}")
+        ClassificationModule.known_classes = classes.copy()
+        print(f"✅ Classification classes updated: {ClassificationModule.known_classes}")
 
     @staticmethod
     def get_model_info() -> Dict[str, Any]:
@@ -191,6 +187,6 @@ class ClassificationModule:
         return {
             "initialized": ClassificationModule.is_initialized,
             "model_type": "mock" if ClassificationModule.model == "mock_model" else "yolo",
-            "classes": ClassificationModule._classes,
-            "num_classes": len(ClassificationModule._classes)
+            "classes": ClassificationModule.known_classes,
+            "num_classes": len(ClassificationModule.known_classes)
         }
