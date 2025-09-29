@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from datetime import datetime, timedelta
 import os
 import subprocess
 import threading
@@ -13,8 +14,8 @@ class BluetoothModule:
     # Static fields
     _initialized = False
     _ser = None
-    _running = False
-    _connected = False
+    is_running = False
+    is_connected = False
     _rfcomm_bound = False
     _reader_thread = None
     _buffer = []
@@ -80,14 +81,14 @@ class BluetoothModule:
             BluetoothModule.connect(mac, sudo)
 
         elif subcommand == 'disconnect':
-            BluetoothModule.disconnect()
+            success = "Successful" if BluetoothModule.disconnect() else "Error disconnecting"
 
         elif subcommand == 'send':
             if len(args) < 2:
                 print("Error: No message provided")
                 return
             message = ' '.join(args[1:])  # Join remaining args as message
-            BluetoothModule.transmit_message(message)
+            success = "Successful" if BluetoothModule.transmit_message(message) else "Error sending message"
 
         elif len(args) >= 2 and args[0] == 'get' and args[1] == 'buffer':
             buffer_content = BluetoothModule.get_buffer()
@@ -97,9 +98,10 @@ class BluetoothModule:
             print("Error: Unknown bluetooth subcommand")
 
     @staticmethod
-    def transmit_message(message: str) -> bool:
+    def transmit_message(message: str, code:str = None) -> bool:
         """Transmit a message via bluetooth"""
-        if not BluetoothModule._connected:
+
+        if not BluetoothModule.is_connected:
             print("Error: Not connected to ESP32")
             return False
 
@@ -108,7 +110,21 @@ class BluetoothModule:
             BluetoothModule._buffer.append(f"SENT: {message}")
 
             # Send the message
-            return BluetoothModule._send_bluetooth_message("", message)
+            try:
+                if not BluetoothModule._ser or not BluetoothModule._ser.is_open:
+                    # print("Error: Serial not open")
+                    return False
+
+                msg = f"{code} {message}".strip()
+                BluetoothModule._ser.write((msg + "\n").encode("utf-8"))
+                BluetoothModule._ser.flush()
+                # print(f"📤 Sent: {msg}")
+                return True
+
+            except Exception as e:
+                print(f"Error: {e}")
+                return False
+
         except Exception as e:
             print(f"Error transmitting message: {e}")
             return False
@@ -160,8 +176,8 @@ class BluetoothModule:
             print("Error: Bluetooth module not initialized")
             return False
 
-        if BluetoothModule._connected:
-            print("Already connected to ESP32")
+        if BluetoothModule.is_connected:
+            print("Success: Already connected to ESP32")
             return True
 
         if not mac_address:
@@ -173,7 +189,7 @@ class BluetoothModule:
             return False
 
         try:
-            print(f"Connecting to ESP32 at {mac_address}...")
+            # print(f"Connecting to ESP32 at {mac_address}...")
 
             # Setup RFCOMM binding
             if not BluetoothModule._setup_rfcomm_binding(mac_address, sudo_password):
@@ -187,11 +203,22 @@ class BluetoothModule:
                 return False
 
             # Start the communication
-            BluetoothModule._running = True
+            BluetoothModule.is_running = True
             BluetoothModule._start_reader_thread()
+            BluetoothModule.is_connected = True
 
-            BluetoothModule._connected = True
-            print("Successfully connected to ESP32")
+            # Attempt to wait 10s for reader thread to crash to verify that connection is fully established
+            timestamp = datetime.now()
+            wait_duration = timedelta(seconds=10)
+            while datetime.now() - timestamp < wait_duration:
+                if not BluetoothModule.is_connected:
+                    # print("Error: I/O failed. Device may be offline")
+                    return False
+                time.sleep(0.001)
+
+
+            print("Successfully connected")
+
             return True
 
         except Exception as e:
@@ -202,14 +229,14 @@ class BluetoothModule:
     @staticmethod
     def disconnect() -> bool:
         """Disconnect from ESP32"""
-        if not BluetoothModule._connected:
-            print("Not connected to ESP32")
+        if not BluetoothModule.is_connected:
+            print("Sucess: Not connected")
             return True
 
         try:
-            print("Disconnecting from ESP32...")
+            # print("Disconnecting Bluetooth...")
             BluetoothModule._cleanup_connection()
-            print("Successfully disconnected from ESP32")
+            print("Successfully disconnected Bluetooth")
             return True
 
         except Exception as e:
@@ -225,7 +252,7 @@ class BluetoothModule:
             if BluetoothModule._ser and BluetoothModule._ser.is_open:
                 try:
                     BluetoothModule._ser.close()
-                    print("✅ Serial connection closed")
+                    # print("✅ Serial connection closed")
                 except Exception as e:
                     print(f"⚠️ Serial close warning: {e}")
 
@@ -235,8 +262,8 @@ class BluetoothModule:
         # Release RFCOMM binding
         BluetoothModule._cleanup_rfcomm_binding(BluetoothModule._sudo_password)
 
-        BluetoothModule._running = False
-        BluetoothModule._connected = False
+        BluetoothModule.is_running = False
+        BluetoothModule.is_connected = False
 
         # Wait for reader thread to finish
         if BluetoothModule._reader_thread and BluetoothModule._reader_thread.is_alive():
@@ -248,7 +275,7 @@ class BluetoothModule:
         """Stop the bluetooth module and free all resources"""
         if BluetoothModule._initialized:
             # Disconnect first if connected
-            if BluetoothModule._connected:
+            if BluetoothModule.is_connected:
                 BluetoothModule.disconnect()
 
             # Clean up module
@@ -304,12 +331,12 @@ class BluetoothModule:
                     return False
 
             BluetoothModule._rfcomm_bound = True
-            print(f"Info: RFCOMM bound to {BluetoothModule._rfcomm_device}")
+            # print(f"Info: RFCOMM bound to {BluetoothModule._rfcomm_device}")
             time.sleep(1)  # Give it time to establish
             return True
 
         except Exception as e:
-            print(f"❌ RFCOMM setup error: {e}")
+            print(f"RFCOMM setup error: {e}")
             return False
 
     @staticmethod
@@ -328,16 +355,16 @@ class BluetoothModule:
                     release_cmd.communicate(input=sudo_password + "\n", timeout=5)
                 else:
                     subprocess.run(["sudo", "rfcomm", "release", "0"], capture_output=True, text=True, timeout=5)
-                print("✅ RFCOMM released")
+                # print("RFCOMM released")
             except Exception as e:
-                print(f"⚠️ RFCOMM release warning: {e}")
-            BluetoothModule._rfcomm_bound = False
+                # print(f"⚠️ RFCOMM release warning: {e}")
+                BluetoothModule._rfcomm_bound = False
 
     @staticmethod
     def _setup_serial() -> bool:
         """Setup serial connection"""
         try:
-            print(f"Opening serial {BluetoothModule._rfcomm_device}...")
+            # print(f"Opening serial {BluetoothModule._rfcomm_device}...")
             BluetoothModule._ser = serial.Serial(
                 port=BluetoothModule._rfcomm_device,
                 baudrate=BluetoothModule._baudrate,
@@ -349,11 +376,11 @@ class BluetoothModule:
             )
             BluetoothModule._ser.flushInput()
             BluetoothModule._ser.flushOutput()
-            print("✅ Serial connection established")
+            # print("✅ Serial connection established")
             return True
 
         except Exception as e:
-            print(f"❌ Serial setup error: {e}")
+            print(f"Serial setup error: {e}")
             return False
 
 
@@ -362,13 +389,13 @@ class BluetoothModule:
         """Start the bluetooth reader thread"""
         BluetoothModule._reader_thread = threading.Thread(target=BluetoothModule._bluetooth_reader_loop, daemon=True)
         BluetoothModule._reader_thread.start()
-        print("📖 Bluetooth reader thread started")
+        # print("📖 Bluetooth reader thread started")
 
     @staticmethod
     def _bluetooth_reader_loop():
         """Main bluetooth reader loop - runs in separate thread"""
         # print("Bluetooth reader active")
-        while BluetoothModule._running and BluetoothModule._ser and BluetoothModule._ser.is_open:
+        while BluetoothModule.is_running and BluetoothModule._ser and BluetoothModule._ser.is_open:
             try:
                 if BluetoothModule._ser.in_waiting > 0:
                     line = BluetoothModule._ser.readline().decode('utf-8', errors='ignore').strip()
@@ -377,10 +404,10 @@ class BluetoothModule:
                 else:
                     time.sleep(0.01)  # Small delay to prevent busy waiting
             except Exception as e:
-                if BluetoothModule._running:
-                    print(f"❌ Bluetooth reader error: {e}")
+                if BluetoothModule.is_running:
+                    print(f"Error: <disconnect> {e}")
                 break
-        print("Bluetooth reader stopped. Disconnecting bluetooth...")
+        # print("Bluetooth reader stopped. Disconnecting bluetooth...")
         threading.Thread(target=BluetoothModule.disconnect, args=[]).start()
 
 
@@ -393,7 +420,7 @@ class BluetoothModule:
         else:
             # Regular message - add to buffer for external consumption
             BluetoothModule._buffer.append(line)
-            print(f"📝 ESP32: {line}")
+            # print(f"ESP32: {line}")
 
     @staticmethod
     def _is_protocol_message(line: str) -> bool:
@@ -421,11 +448,11 @@ class BluetoothModule:
 
         if code == 'RTC00':
             print("🤝 ESP32 requesting connection")
-            BluetoothModule._send_bluetooth_message('RTC01', 'Laptop ready')
+            BluetoothModule.transmit_message('RTC01', 'Laptop ready')
 
         elif code == 'RTC02':
             print("🎉 Connection established")
-            BluetoothModule._connected = True
+            BluetoothModule.is_connected = True
 
         elif code == 'PA000':
             BluetoothModule._handle_image_metadata(content)
@@ -441,23 +468,6 @@ class BluetoothModule:
             # Add error to buffer so Flutter app can see it
             BluetoothModule._buffer.append(f"ERROR: {content}")
 
-    @staticmethod
-    def _send_bluetooth_message(code: str, content: str = "") -> bool:
-        """Send a message via bluetooth"""
-        try:
-            if not BluetoothModule._ser or not BluetoothModule._ser.is_open:
-                print("❌ Serial not open")
-                return False
-
-            msg = f"{code} {content}".strip()
-            BluetoothModule._ser.write((msg + "\n").encode("utf-8"))
-            BluetoothModule._ser.flush()
-            print(f"📤 Sent: {msg}")
-            return True
-
-        except Exception as e:
-            print(f"❌ Bluetooth send error: {e}")
-            return False
 
     @staticmethod
     def _handle_image_metadata(content: str):

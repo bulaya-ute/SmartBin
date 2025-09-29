@@ -3,6 +3,7 @@ import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 
 /// Responsible for communication with python backend, which is used for
@@ -23,6 +24,17 @@ class Engine {
   static StreamController<String>? _responseController;
   static Stream<String>? _responseStream;
   static final Queue<String> _lineBuffer = Queue<String>();
+  static String moduleName = "ENGINE";
+
+  // Callback for log messages
+  static void Function(String message, {Color? messageColor})? _logCallback;
+
+  /// Set the log callback function to receive Engine.print() messages
+  static void setLogCallback(
+    void Function(String message, {Color? messageColor})? callback,
+  ) {
+    _logCallback = callback;
+  }
 
   /// Initialization method. Establishes communication with the python API
   static Future<void> init() async {
@@ -31,18 +43,16 @@ class Engine {
       return;
     }
 
-    print("Starting engine... Working dir: $workingDir \n"
-        "Python executable: $pythonExecutablePath \n"
-        "Python script: $engineScriptPath");
+    print(
+      "Starting engine... Working dir: $workingDir \n"
+      "Python executable: $pythonExecutablePath \n"
+      "Python script: $engineScriptPath",
+    );
     try {
-      process = await Process.start(
-          pythonExecutablePath,
-          [
-            engineScriptPath,
-            "start",
-          ],
-        workingDirectory: workingDir
-      );
+      process = await Process.start(pythonExecutablePath, [
+        engineScriptPath,
+        "start",
+      ], workingDirectory: workingDir);
 
       // Set up single persistent stream listener
       _setupStreamListener();
@@ -105,8 +115,9 @@ class Engine {
         );
   }
 
-
-  static Future<String?> waitForResponse([Duration timeout = const Duration(seconds: 2)]) async {
+  static Future<String?> waitForResponse([
+    Duration timeout = const Duration(seconds: 2),
+  ]) async {
     final start = DateTime.now();
     while (_lineBuffer.isEmpty) {
       final elapsed = DateTime.now().difference(start);
@@ -124,10 +135,11 @@ class Engine {
   /// Send a command to the engine
   static Future<String?> sendCommand(
     String command, {
+    String? source,
     Duration timeout = const Duration(seconds: 5),
   }) async {
     if (!isInitialized) {
-      print("Error: Engine not initialized.");
+      print("Error: Engine not initialized.", source: source);
       return null;
     }
 
@@ -136,13 +148,12 @@ class Engine {
       process!.stdin.writeln(command);
       await process!.stdin.flush();
 
-      print("→ $command");
-
+      print("→ $command", source: source);
 
       // Wait for response
       return await waitForResponse(timeout);
     } catch (e) {
-      print("Error sending command '$command': $e");
+      print("Error sending command '$command': $e", source: source);
       return null;
     }
   }
@@ -178,18 +189,45 @@ class Engine {
     print("Engine stopped and cleaned up");
   }
 
-  static void print(String message) {
+  static void print(
+    String message, {
+    bool hideBufferRequests = true,
+    String? source,
+  }) {
+    source = source ?? moduleName;
+
     // Regex matches --sudo <password> or --sudo=<password>
     final sudoRegex = RegExp(r'(--sudo(?:=|\s+))([^\s]+)');
     final obscured = message.replaceAllMapped(
       sudoRegex,
       (match) => '${match[1]}${'*' * match[2]!.length}',
     );
-    debugPrint("[ENGINE] $obscured");
+    debugPrint("[$source] $obscured");
+
+    if (hideBufferRequests) {
+      if (message.contains("bluetooth get buffer") ||
+          message.trim() == "← []") {
+        return;
+      }
+    }
+    // debugPrint(" --- '$obscured'");
+    // Call the log callback if set, using blue color for engine messages
+    _logCallback?.call("[$source] $obscured");
   }
 
-  static void error(String description, {bool throwError = true}) {
-    debugPrint("[ENGINE] ⚠️ $description");
+  // Raise an error
+  static void error(
+    String description, {
+    bool throwError = true,
+    String? source,
+  }) {
+    source = source ?? moduleName;
+
+    debugPrint("[$source] ⚠️ $description");
+
+    // Call the log callback if set, using red color for error messages
+    _logCallback?.call("[$source] ⚠️ $description");
+
     if (throwError) throw Exception(description);
   }
 }

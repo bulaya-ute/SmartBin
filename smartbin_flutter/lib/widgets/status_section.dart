@@ -6,7 +6,7 @@ class StatusSection extends StatefulWidget {
   final int initialRecyclable;
   final int initialNonRecyclable;
   final int initialCoins;
-  final Map<String, int>? initialDetectionCounts;
+  final Map<String, int>? detectionCounts;
   final ConnectionState connectionState;
 
   const StatusSection({
@@ -14,7 +14,7 @@ class StatusSection extends StatefulWidget {
     this.initialRecyclable = 0,
     this.initialNonRecyclable = 0,
     this.initialCoins = 0,
-    this.initialDetectionCounts,
+    this.detectionCounts,
     this.connectionState = ConnectionState.disconnected,
   });
 
@@ -27,7 +27,7 @@ class _StatusSectionState extends State<StatusSection> {
   late int _nonRecyclable = widget.initialNonRecyclable;
   late int _coins = widget.initialCoins;
   late Map<String, int> _detectionCounts = Map.of(
-    widget.initialDetectionCounts ??
+    widget.detectionCounts ??
         const {
           'Plastic': 0,
           'Glass': 0,

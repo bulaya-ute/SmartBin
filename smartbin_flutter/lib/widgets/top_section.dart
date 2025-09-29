@@ -14,6 +14,7 @@ class TopSection extends StatelessWidget {
     required this.detectionClasses,
     required this.classificationResult,
     required this.connectionState,
+    required this.detectionCounts
   });
 
   final double leftRatio; // fraction of available width for left panel
@@ -24,6 +25,8 @@ class TopSection extends StatelessWidget {
   final List<String> detectionClasses;
   final Map<String, dynamic>? classificationResult;
   final ConnectionState connectionState;
+  final Map<String, int> detectionCounts;
+
 
   @override
   Widget build(BuildContext context) {
@@ -51,10 +54,11 @@ class TopSection extends StatelessWidget {
           availableWidth - minRightWidth,
         );
 
-        Map<String, int> detectionCounts = {};
-        for (String detectionClass in detectionClasses) {
-          detectionCounts[detectionClass] = 0;
-        }
+        // // Map<String, int> detectionCounts = {};
+        // for (String detectionClass in detectionClasses) {
+        //   detectionCounts[detectionClass] = 0;
+        // }
+        // print(detectionCounts);
         return Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -96,7 +100,7 @@ class TopSection extends StatelessWidget {
             // Right: Status section grows to fill remaining space
             Expanded(
               child: StatusSection(
-                initialDetectionCounts: detectionCounts,
+                detectionCounts: detectionCounts,
                 connectionState: connectionState,
               ),
             ),

@@ -12,19 +12,13 @@ import '../modules/bluetooth.dart';
 import '../modules/engine.dart';
 import '../modules/classification.dart';
 
-enum ConnectionState {
-  disconnected,
-  connecting,
-  connected,
-}
+enum ConnectionState { disconnected, connecting, connected }
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
-
-
 }
 
 class _HomeScreenState extends State<HomeScreen> {
@@ -58,12 +52,27 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // Computed getters for connection state
   bool get isConnected => _connectionState == ConnectionState.connected;
+
   bool get isConnecting => _connectionState == ConnectionState.connecting;
+
   bool get isDisconnected => _connectionState == ConnectionState.disconnected;
 
   @override
   void initState() {
     super.initState();
+
+    // Set up Engine log callback to receive Engine.print() messages
+    Engine.setLogCallback((message, {Color? messageColor}) {
+      appendLogMessage(message);
+    });
+    Bluetooth.setDisconnectCallback(() {
+      if (_connectionState == ConnectionState.connected ||
+          _connectionState == ConnectionState.connecting) {
+        _toggleConnection();
+      }
+    });
+
+    // _detectionClasses = jsonDecode( Engine.sendCommand("classification get-classes") ?? "{}");
     initializeHome();
     _startBufferReading();
   }
@@ -79,9 +88,8 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       // Get available classes
       await _loadDetectionClasses();
-
     } catch (e) {
-      _addLogMessage('Error getting classes modules: $e', Colors.red);
+      appendLogMessage('Error getting classes modules: $e', Colors.red);
     }
   }
 
@@ -94,24 +102,30 @@ class _HomeScreenState extends State<HomeScreen> {
         setState(() {
           _detectionClasses = classes.cast<String>();
         });
-        _addLogMessage('Loaded ${_detectionClasses.length} detection classes', Colors.blue);
+        appendLogMessage(
+          'Loaded ${_detectionClasses.length} detection classes',
+          Colors.blue,
+        );
       }
     } catch (e) {
-      _addLogMessage('Error loading detection classes: $e', Colors.red);
+      appendLogMessage('Error loading detection classes: $e', Colors.red);
     }
   }
 
   void _startBufferReading() {
-    _bufferReadTimer = Timer.periodic(Duration(milliseconds: 100), (timer) async {
+    _bufferReadTimer = Timer.periodic(Duration(milliseconds: 100), (
+      timer,
+    ) async {
       if (isConnected) {
         try {
           List<String>? buffer = await Bluetooth.readBuffer();
-          if (buffer == null) return;
+          if (buffer == null || buffer.isEmpty) return;
           for (String line in buffer) {
             line = line.trim();
             if (line.trim().isEmpty) continue;
 
-            _appendLogMessage(line);
+
+            appendLogMessage(line);
           }
         } catch (e) {
           // Silently handle buffer read errors to avoid spam
@@ -120,8 +134,7 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  void _appendLogMessage(String message) {
-    Color messageColor = Colors.grey;
+  void appendLogMessage(String message, [Color messageColor = Colors.grey]) {
 
     // Format PA/PX messages in yellow
     if (message.startsWith('PA') || message.startsWith('PX')) {
@@ -133,18 +146,25 @@ class _HomeScreenState extends State<HomeScreen> {
       // Extract image path and potentially trigger classification
       final imagePath = message.substring('IMAGE_RECEIVED:'.length).trim();
       _triggerClassification(imagePath);
-    } 
-    _addLogMessage(message, messageColor);
+    }
+    if (message.toLowerCase().contains("disconnect") && message.toLowerCase().contains("bluetooth")) {
+      messageColor = Colors.red;
+      setState(() {
+        _connectionState = ConnectionState.disconnected;
+      });
+    }
+
+    _messages.add(LogMessage(text: message, color: messageColor));
+
   }
 
   Future<void> _triggerClassification(String imagePath) async {
     try {
-      _addLogMessage('→ Classifying image: $imagePath', Colors.blue);
-      String? response = await Engine.sendCommand('classify $imagePath');
-      if (response != null) {
-        final result = jsonDecode(response);
+      appendLogMessage('→ Classifying image: $imagePath', Colors.blue);
+      final result = await Classification.classify(imagePath);
+      if (result != null) {
         setState(() {
-          _classificationResult = result;
+          _classificationResult = result as Map<String, dynamic>?;
         });
 
         // Find the class with highest confidence
@@ -159,24 +179,29 @@ class _HomeScreenState extends State<HomeScreen> {
             }
           });
 
-          _addLogMessage('← Classification: $topClass (${(maxConfidence * 100).toStringAsFixed(1)}%)', Colors.green);
+          appendLogMessage(
+            '← Classification: $topClass (${(maxConfidence * 100).toStringAsFixed(1)}%)',
+            Colors.green,
+          );
         }
       }
     } catch (e) {
-      _addLogMessage('Error during classification: $e', Colors.red);
+      appendLogMessage('Error during classification: $e', Colors.red);
     }
   }
 
-  void _addLogMessage(String text, [Color? color]) {
-    if (mounted) {
-      setState(() {
-        _messages.add(LogMessage(
-          text: '[${DateTime.now().toString().substring(11, 19)}] $text',
-          color: color,
-        ));
-      });
-    }
-  }
+  // void appendLogMessage(String text, [Color? color]) {
+  //   if (mounted) {
+  //     setState(() {
+  //       _messages.add(
+  //         LogMessage(
+  //           text: '[${DateTime.now().toString().substring(11, 19)}] $text',
+  //           color: color,
+  //         ),
+  //       );
+  //     });
+  //   }
+  // }
 
   // Show a dialog to prompt the user for the sudo password
   static Future<String?> _promptForPassword(BuildContext context) async {
@@ -212,13 +237,17 @@ class _HomeScreenState extends State<HomeScreen> {
     if (isConnected) {
       // Disconnect
       try {
-        setState(() {
-          _connectionState = ConnectionState.disconnected;
-        });
-        await Engine.sendCommand('bluetooth disconnect');
-        _addLogMessage('Disconnected from SmartBin', Colors.orange);
+        bool success = await Bluetooth.disconnect();
+        if (success) {
+          appendLogMessage('Disconnected from SmartBin', Colors.orange);
+          setState(() {
+            _connectionState = ConnectionState.disconnected;
+          });
+        } else {
+          appendLogMessage("Error disconnecting bluetooth", Colors.red);
+        }
       } catch (e) {
-        _addLogMessage('Error disconnecting: $e', Colors.red);
+        appendLogMessage('Error disconnecting: $e', Colors.red);
         setState(() {
           _connectionState = ConnectionState.disconnected;
         });
@@ -226,18 +255,18 @@ class _HomeScreenState extends State<HomeScreen> {
     } else if (isDisconnected) {
       // Connect
       try {
-
         setState(() {
           _connectionState = ConnectionState.connecting;
         });
-        _addLogMessage('→ Connecting to SmartBin...', Colors.blue);
+
+        appendLogMessage('→ Connecting to SmartBin...', Colors.blue);
         await Bluetooth.connect(macAddress: _macCtl.text);
         setState(() {
           _connectionState = ConnectionState.connected;
         });
-        _addLogMessage('← Device connected successfully', Colors.green);
+        appendLogMessage('← Device connected successfully', Colors.green);
       } catch (e) {
-        _addLogMessage('Connection failed: $e', Colors.red);
+        appendLogMessage('Connection failed: $e', Colors.red);
         setState(() {
           _connectionState = ConnectionState.disconnected;
         });
@@ -248,7 +277,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _sendCommand(String command) async {
     try {
-      _addLogMessage('→ $command', Colors.green);
+      appendLogMessage('→ $command', Colors.green);
 
       if (command.toLowerCase().startsWith('bluetooth send')) {
         // Extract message part and use transmitMessage
@@ -258,11 +287,11 @@ class _HomeScreenState extends State<HomeScreen> {
         // Send other commands directly to engine
         String? response = await Engine.sendCommand(command);
         if (response != null && response.isNotEmpty) {
-          _addLogMessage('← $response', Colors.grey);
+          appendLogMessage('← $response', Colors.grey);
         }
       }
     } catch (e) {
-      _addLogMessage('Error sending command: $e', Colors.red);
+      appendLogMessage('Error sending command: $e', Colors.red);
     }
   }
 
@@ -295,7 +324,7 @@ class _HomeScreenState extends State<HomeScreen> {
             _topRatio = clampedTopRatio.toDouble();
           }
           final topHeight = availableForPanels * _topRatio;
-
+          // print("detection classes")
           return Padding(
             padding: const EdgeInsets.all(8.0),
             child: Column(
@@ -313,6 +342,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     detectionClasses: _detectionClasses,
                     classificationResult: _classificationResult,
                     connectionState: _connectionState,
+                    detectionCounts: { for (var item in _detectionClasses) item : 0 },
                   ),
                 ),
 

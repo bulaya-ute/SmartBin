@@ -19,6 +19,7 @@ from datetime import datetime, timedelta
 from PIL import Image, ImageTk
 from typing import Optional, Dict, Any
 import subprocess
+from ultralytics import YOLO
 
 # Import our existing protocol
 from smartbin_pyserial_protocol import SmartBinPySerialProtocol
@@ -236,8 +237,8 @@ class SmartBinGUI:
         }
         self.bin_capacity = 10
         self.coin_count = 7
-        self.coin_capacity = 10
-        
+        self.coin_capacity = 10;
+
         self._create_bin_visualizations()
     
     def _create_bin_visualizations(self):
@@ -724,170 +725,71 @@ class SmartBinGUI:
                     self.expected_parts = 0
             
             def _classify_with_yolo_backend(self, image: Image.Image) -> Dict[str, Any]:
-                """Classify image using official Ultralytics YOLO command"""
+                """Classify image using official Ultralytics YOLO model directly"""
                 try:
-                    import subprocess
                     import tempfile
                     import os
-                    import json
-                    import re
-                    
+                    from ultralytics import YOLO
+                    import numpy as np
                     # Save image to temporary file
                     with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as tmp_file:
                         image.save(tmp_file.name, 'JPEG')
                         tmp_path = tmp_file.name
-                    
                     try:
-                        # Use official ultralytics YOLO command
-                        model_path = "runs/smartbin_9class/weights/best.pt"
-                        
-                        # Activate virtual environment and run YOLO command
-                        cmd = [
-                            "bash", "-c", 
-                            f"source .venv/bin/activate && yolo classify predict model={model_path} source={tmp_path} save=false show=false"
-                        ]
-                        
+                        # Commented out subprocess logic
+                        # model_path = "runs/smartbin_9class/weights/best.pt"
+                        # cmd = [ ... ]
+                        # result = subprocess.run(cmd, ...)
+                        # ...existing code...
                         self.gui.message_queue.put({
                             'type': 'info',
-                            'message': f"🔄 Running official YOLO classification on {tmp_path}",
+                            'message': f"🔄 Running YOLO classification on {tmp_path}",
                             'timestamp': datetime.now().strftime("%H:%M:%S")
                         })
-                        
-                        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30, cwd=".")
-                        
-                        print(f"\n🔍 YOLO Command Debug:")
-                        print(f"Command: {' '.join(cmd)}")
-                        print(f"Return code: {result.returncode}")
-                        print(f"STDOUT:\n{result.stdout}")
-                        print(f"STDERR:\n{result.stderr}")
-                        
-                        if result.returncode == 0:
-                            # Parse YOLO output to extract classification results
-                            stdout_text = result.stdout
-                            
-                            # Look for the classification results in the output
-                            # YOLO typically outputs something like: "class_name: confidence"
-                            classification_results = self._parse_yolo_output(stdout_text)
-                            
-                            if classification_results["success"]:
-                                self.gui.message_queue.put({
-                                    'type': 'info',
-                                    'message': f"✅ YOLO classification successful: {classification_results['result']}",
-                                    'timestamp': datetime.now().strftime("%H:%M:%S")
-                                })
-                                return classification_results
-                            else:
-                                self.gui.message_queue.put({
-                                    'type': 'error',
-                                    'message': f"❌ Failed to parse YOLO output",
-                                    'timestamp': datetime.now().strftime("%H:%M:%S")
-                                })
-                                return {
-                                    "success": False,
-                                    "error": "Failed to parse YOLO classification output",
-                                    "raw_output": stdout_text
-                                }
-                        else:
-                            error_msg = f"YOLO command failed (exit code {result.returncode}): {result.stderr}"
-                            self.gui.message_queue.put({
-                                'type': 'error',
-                                'message': f"❌ YOLO command failed: {error_msg}",
-                                'timestamp': datetime.now().strftime("%H:%M:%S")
-                            })
-                            return {
-                                "success": False,
-                                "error": error_msg,
-                                "raw_output": result.stdout
-                            }
-                    
-                    finally:
-                        # Clean up temporary file
-                        try:
-                            os.unlink(tmp_path)
-                        except:
-                            pass
-                
-                except Exception as e:
-                    return {
-                        "success": False,
-                        "error": f"YOLO command integration error: {e}"
-                    }
-            
-            def _parse_yolo_output(self, output_text: str) -> Dict[str, Any]:
-                """Parse YOLO classification output"""
-                try:
-                    # Initialize default values
-                    all_confidences = {}
-                    top_class = None
-                    top_confidence = 0.0
-                    
-                    print(f"\n🔍 Parsing YOLO output:")
-                    print(f"Raw output: {repr(output_text)}")
-                    
-                    # Look for the classification line with confidences
-                    # Format: "image 1/1 /path/image.jpg: 224x224 class1 0.97, class2 0.02, class3 0.00, ..."
-                    lines = output_text.split('\n')
-                    
-                    for line in lines:
-                        line = line.strip()
-                        print(f"Processing line: {repr(line)}")
-                        
-                        # Look for the line containing classification results
-                        if "image 1/1" in line and ".jpg:" in line:
-                            # Extract the part after the image dimensions
-                            # Find the pattern: "224x224 class1 0.97, class2 0.02, ..."
-                            dimension_match = re.search(r'\d+x\d+\s+(.+?)(?:\d+\.\d+ms|\s*$)', line)
-                            if dimension_match:
-                                results_part = dimension_match.group(1).strip()
-                                print(f"Found results part: {repr(results_part)}")
-                                
-                                # Parse class confidence pairs
-                                # Pattern: "class_name confidence, class_name confidence, ..."
-                                class_conf_pattern = r'([a-zA-Z_]+)\s+([0-9.]+)'
-                                matches = re.findall(class_conf_pattern, results_part)
-                                
-                                print(f"Found matches: {matches}")
-                                
-                                for class_name, conf_str in matches:
-                                    try:
-                                        confidence = float(conf_str)
-                                        all_confidences[class_name] = confidence
-                                        
-                                        if confidence > top_confidence:
-                                            top_confidence = confidence
-                                            top_class = class_name
-                                            
-                                        print(f"Parsed: {class_name} = {confidence}")
-                                    except ValueError as e:
-                                        print(f"Failed to parse confidence '{conf_str}': {e}")
-                                        continue
-                    
-                    print(f"Final results:")
-                    print(f"  Top class: {top_class}")
-                    print(f"  Top confidence: {top_confidence}")
-                    print(f"  All confidences: {all_confidences}")
-                    
-                    if top_class and all_confidences:
+                        # Load model
+                        model_path = "runs/smartbin_9class/weights/best.pt"
+                        model = YOLO(model_path)
+                        # Run prediction
+                        results = model.predict(tmp_path, task="classify", verbose=False)
+                        # Extract confidences and class names
+                        confidences = [float(c) for c in list(results[0].probs.data)]
+                        class_names = results[0].names
+                        # Find top class
+                        top_idx = int(np.argmax(confidences))
+                        top_class = class_names[top_idx]
+                        top_confidence = confidences[top_idx]
+                        all_confidences = {class_names[i]: round(confidences[i], 4) for i in range(len(class_names))}
+                        self.gui.message_queue.put({
+                            'type': 'info',
+                            'message': f"✅ YOLO classification successful: {top_class}",
+                            'timestamp': datetime.now().strftime("%H:%M:%S")
+                        })
                         return {
                             "success": True,
                             "result": top_class,
                             "confidence": top_confidence,
                             "all_confidences": all_confidences
                         }
-                    else:
-                        print(f"⚠️ No valid classification results found")
+                    except Exception as e:
+                        self.gui.message_queue.put({
+                            'type': 'error',
+                            'message': f"❌ YOLO classification error: {e}",
+                            'timestamp': datetime.now().strftime("%H:%M:%S")
+                        })
                         return {
                             "success": False,
-                            "error": "No valid classification results found in YOLO output",
-                            "raw_output": output_text
+                            "error": str(e)
                         }
-                        
+                    finally:
+                        # Clean up temporary file
+                        try:
+                            os.unlink(tmp_path)
+                        except:
+                            pass
                 except Exception as e:
-                    print(f"❌ Exception in _parse_yolo_output: {e}")
                     return {
                         "success": False,
-                        "error": f"Failed to parse YOLO output: {e}",
-                        "raw_output": output_text
+                        "error": f"YOLO model integration error: {e}"
                     }
         
         self.protocol_class = GUIProtocol
@@ -1155,8 +1057,8 @@ class SmartBinGUI:
             
             # Check if class is recognized by our hard-coded system
             known_classes = set(self.bin_counts.keys())
-            model_classes = set(all_classes.keys())
-            
+            model_classes = set(all_classes.keys());
+
             print(f"\n🔧 System Analysis:")
             print(f"  • Known Classes (Hard-coded): {sorted(known_classes)}")
             print(f"  • Model Classes (Dynamic):    {sorted(model_classes)}")

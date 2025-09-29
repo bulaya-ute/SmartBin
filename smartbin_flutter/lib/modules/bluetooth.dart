@@ -9,6 +9,8 @@ class Bluetooth extends BaseModule {
   static bool _isInitialized = false;
   static String? rfcommBinding;
   static String? serialPort;
+  static String moduleName = "BLUETOOTH";
+  static void Function()? disconnectCallback;
 
   static bool get isInitialized {
     if (!_isInitialized) {
@@ -46,106 +48,38 @@ class Bluetooth extends BaseModule {
     }
   }
 
-  static Future<void> connect({
+  static Future<bool> connect({
     String macAddress = "EC:E3:34:15:F2:62",
     String? sudoPassword,
   }) async {
     if (!isInitialized) {
       error("Cannot connect: Bluetooth module not initialized");
-      return;
+      return false;
     }
 
     print("Connecting to device at $macAddress...");
 
-    try {
-      // Send connect command to Python backend
-      String? response = await Engine.sendCommand(
-        "bluetooth connect --mac $macAddress --sudo ${Security.sudoPassword}",
-        timeout: Duration(seconds: 15),
-      );
+    // Send connect command to Python backend
+    String? response = await Engine.sendCommand(
+      "bluetooth connect --mac $macAddress --sudo ${Security.sudoPassword}",
+      timeout: Duration(seconds: 15),
+    );
 
-      if (response == null) {
-        error("Connection failed: No response from backend");
-        return;
-      }
+    if (response == null) {
+      print("Connection failed: No response from backend");
+      return false;
+    }
 
-      // Check for connection progress messages
-      if (response.toLowerCase().contains("connecting to esp32")) {
-        print("Backend is attempting connection...");
-
-        // Update the response
-        response = await Engine.waitForResponse(Duration(seconds: 10));
-        if (response == null) {
-          error("Error: Timeout waiting for response");
-          return;
-        }
-
-        // Handle message for opening serial port
-        if (response.toLowerCase().contains("opening serial")) {
-          serialPort = response.substring(15, response.length + 1);
-          print("Opening serial: $serialPort");
-          response = await Engine.waitForResponse(Duration(seconds: 15));
-        }
-
-        // Update the response
-        response = await Engine.waitForResponse(Duration(seconds: 10));
-        if (response == null) {
-          error("Error: Could not open serial to $serialPort");
-          return;
-        }
-
-        // Wait for additional responses about RFCOMM binding
-        rfcommBinding = response
-            .substring("info: rfcomm bound to ".length)
-            .trim();
-        print("RFCOMM bound to $rfcommBinding");
-
-        // Update the response
-        response = await Engine.waitForResponse(Duration(seconds: 10));
-        if (response == null) {
-          error("Error: Error trying to get config");
-          return;
-        }
-
-        // Get configuration information
-        if (response.toLowerCase().contains("serial connection established")) {
-          String? configData1 = await Engine.waitForResponse();
-          String? configData2 = await Engine.waitForResponse();
-          print("Successfully connected to ESP32");
-
-        }
-
-        // // Wait for final success message
-        // // String? response = await Engine.waitForResponse(
-        // //   Duration(seconds: 10),
-        // // );
-        // if (response.toLowerCase().contains("successfully connected")) {
-        //   print("Successfully connected to ESP32");
-        //
-        //   // Wait for the "success" confirmation
-        //   String? successResponse = await Engine.waitForResponse(
-        //     Duration(seconds: 5),
-        //   );
-        //   if (successResponse?.toLowerCase().trim() == "success") {
-        //     print("Connection established successfully");
-        //   }
-        // } else {
-        //   error(
-        //     "Connection failed: Expected success confirmation not received. Got: $response",
-        //   );
-        // }
-
-      } else if (response.toLowerCase().contains("already connected")) {
-        print("Already connected.");
-      } else if (response.toLowerCase().startsWith("error:")) {
-        error("Connection failed: $response");
-      } else if (response.toLowerCase().trim() == "success") {
-        print("Connection established successfully");
-      } else {
-        error("Unexpected connection response: $response");
-      }
-    } catch (e) {
-      error("Connection failed with exception: $e");
+    response = response.trim();
+    if (response.toLowerCase().startsWith("error")) {
+      print(response);
+      return false;
+    } else if (response.toLowerCase().startsWith("success")) {
+      print("Successfully connected to Bluetooth device");
+      return true;
+    } else {
+      error("Unexpected message: $response");
+      return false;
     }
   }
 
@@ -170,9 +104,14 @@ class Bluetooth extends BaseModule {
 
   /// Read bluetooth buffer
   static Future<List<String>?> readBuffer() async {
-    String? response = await Engine.sendCommand("bluetooth get buffer");
-    if (response == null) return [];
-    return jsonDecode(response);
+    String? response = await Engine.sendCommand(
+      "bluetooth get buffer",
+      source: moduleName,
+    );
+    if (response == null) return null;
+    List<String> decodedList = jsonDecode(response);
+    if (decodedList.isEmpty) return null;
+    return decodedList;
   }
 
   static void print(String message) {
@@ -182,5 +121,16 @@ class Bluetooth extends BaseModule {
   static void error(String description, {bool throwError = true}) {
     debugPrint("[BLUETOOTH] ⚠️ $description");
     if (throwError) throw Exception(description);
+  }
+
+  static void setDisconnectCallback(void Function() callback) {
+    disconnectCallback = callback;
+  }
+
+  static Future<bool> disconnect() async {
+    print("Terminating connection...");
+    Engine.sendCommand("bluetooth disconnect");
+    disconnectCallback?.call();
+    return true;
   }
 }
