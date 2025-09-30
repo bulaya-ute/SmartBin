@@ -54,11 +54,6 @@ class TopSection extends StatelessWidget {
           availableWidth - minRightWidth,
         );
 
-        // // Map<String, int> detectionCounts = {};
-        // for (String detectionClass in detectionClasses) {
-        //   detectionCounts[detectionClass] = 0;
-        // }
-        // print(detectionCounts);
         return Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [

@@ -26,16 +26,6 @@ class _StatusSectionState extends State<StatusSection> {
   late int _recyclable = widget.initialRecyclable;
   late int _nonRecyclable = widget.initialNonRecyclable;
   late int _coins = widget.initialCoins;
-  late Map<String, int> _detectionCounts = Map.of(
-    widget.detectionCounts ??
-        const {
-          'Plastic': 0,
-          'Glass': 0,
-          'Carton': 0,
-          'Textile': 0,
-          'E-waste': 0,
-        },
-  );
 
   bool get _areButtonsEnabled => widget.connectionState == ConnectionState.connected;
 
@@ -215,8 +205,8 @@ class _StatusSectionState extends State<StatusSection> {
             Wrap(
               spacing: 12,
               runSpacing: 12,
-              children: _detectionCounts.entries
-                  .map((e) => _detectionCard(e.key, e.value))
+              children: widget.detectionCounts!.entries
+                  .map((entry) => _detectionCard(entry.key, entry.value))
                   .toList(),
             ),
           ],

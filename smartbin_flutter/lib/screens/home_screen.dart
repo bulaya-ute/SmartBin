@@ -45,7 +45,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // Real data from backend
   List<String> _detectionClasses = [];
-  Map<String, dynamic>? _classificationResult;
+  Map<String, double>? _classificationResult;
   Timer? _bufferReadTimer;
 
   final List<LogMessage> _messages = [];
@@ -72,7 +72,6 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     });
 
-    // _detectionClasses = jsonDecode( Engine.sendCommand("classification get-classes") ?? "{}");
     initializeHome();
     _startBufferReading();
   }
@@ -162,7 +161,7 @@ class _HomeScreenState extends State<HomeScreen> {
       final result = await Classification.classify(imagePath);
       if (result != null) {
         setState(() {
-          _classificationResult = result as Map<String, dynamic>?;
+          _classificationResult = result as Map<String, double>?;
         });
 
         // Find the class with highest confidence
