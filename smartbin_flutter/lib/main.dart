@@ -37,7 +37,8 @@ class StartupEntry extends StatefulWidget {
 }
 
 class _StartupEntryState extends State<StartupEntry> {
-  bool _dialogShown = false;
+  bool _sudoPromptDialogShown = false;
+  // bool _sudoPromptDialogShown = true;
 
   @override
   void initState() {
@@ -52,90 +53,91 @@ class _StartupEntryState extends State<StartupEntry> {
 
       return;
     }
-    if (_dialogShown) return;
+    if (_sudoPromptDialogShown) return;
 
     bool incorrectEntry = false;
     bool isLoading = false;
 
-    _dialogShown = true;
-    String? password = await showDialog<String>(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) {
-        final controller = TextEditingController();
-        return AlertDialog(
-          title: const Text('Sudo Password Required'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'To use SmartBin, your sudo password is required for privileged operations (e.g., Bluetooth). ',
-              ),
-              const SizedBox(height: 16),
-              if (incorrectEntry)
-                Text(
-                  "Sorry, the password you entered is incorrect",
-                  style: TextStyle(color: Colors.red),
-                ),
-              TextField(
-                controller: controller,
-                obscureText: true,
-                decoration: const InputDecoration(labelText: 'Sudo Password'),
-                autofocus: true,
-              ),
-            ],
-          ),
-          actions: [
-            // TextButton(
-            //   onPressed: () => Navigator.of(context).pop(null),
-            //   child: const Text('Cancel'),
-            // ),
-            ElevatedButton(
-              onPressed: isLoading
-                  ? null
-                  : () async {
-                      setState(() {
-                        isLoading = true;
-                      });
-
-                      // Inform the user that the password is incorrect, if it is
-                      if (!await Security.validateSudo(controller.text)) {
-                        incorrectEntry = true;
-                        // ScaffoldMessenger.of(context).showSnackBar(
-                        //   SnackBar(
-                        //     backgroundColor: Colors.red,
-                        //     content: Text(
-                        //       "Incorrect password",
-                        //       style: TextStyle(color: Colors.white),
-                        //     ),
-                        //   ),
-                        // );
-
-                        setState(() {
-                          isLoading = false;
-                        });
-                        return;
-                      }
-
-                      // Save the password
-                      Security.sudoPassword = controller.text;
-
-                      if (mounted) {
-                        Navigator.of(context).pop(controller.text);
-                      }
-
-                      setState(() {
-                        isLoading = false;
-                      });
-                    },
-              child: isLoading
-                  ? const Text("Checking...")
-                  : const Text('Continue'),
-            ),
-          ],
-        );
-      },
-    );
+    _sudoPromptDialogShown = true;
+    // String? password = await showDialog<String>(
+    //   context: context,
+    //   barrierDismissible: false,
+    //   builder: (context) {
+    //     final controller = TextEditingController();
+    //     return AlertDialog(
+    //       title: const Text('Sudo Password Required'),
+    //       content: Column(
+    //         mainAxisSize: MainAxisSize.min,
+    //         children: [
+    //           const Text(
+    //             'To use SmartBin, your sudo password is required for privileged operations (e.g., Bluetooth). ',
+    //           ),
+    //           const SizedBox(height: 16),
+    //           if (incorrectEntry)
+    //             Text(
+    //               "Sorry, the password you entered is incorrect",
+    //               style: TextStyle(color: Colors.red),
+    //             ),
+    //           TextField(
+    //             controller: controller,
+    //             obscureText: true,
+    //             decoration: const InputDecoration(labelText: 'Sudo Password'),
+    //             autofocus: true,
+    //           ),
+    //         ],
+    //       ),
+    //       actions: [
+    //         // TextButton(
+    //         //   onPressed: () => Navigator.of(context).pop(null),
+    //         //   child: const Text('Cancel'),
+    //         // ),
+    //         ElevatedButton(
+    //           onPressed: isLoading
+    //               ? null
+    //               : () async {
+    //                   setState(() {
+    //                     isLoading = true;
+    //                   });
+    //
+    //                   // Inform the user that the password is incorrect, if it is
+    //                   if (!await Security.validateSudo(controller.text)) {
+    //                     incorrectEntry = true;
+    //                     // ScaffoldMessenger.of(context).showSnackBar(
+    //                     //   SnackBar(
+    //                     //     backgroundColor: Colors.red,
+    //                     //     content: Text(
+    //                     //       "Incorrect password",
+    //                     //       style: TextStyle(color: Colors.white),
+    //                     //     ),
+    //                     //   ),
+    //                     // );
+    //
+    //                     setState(() {
+    //                       isLoading = false;
+    //                     });
+    //                     return;
+    //                   }
+    //
+    //                   // Save the password
+    //                   Security.sudoPassword = controller.text;
+    //
+    //                   if (mounted) {
+    //                     Navigator.of(context).pop(controller.text);
+    //                   }
+    //
+    //                   setState(() {
+    //                     isLoading = false;
+    //                   });
+    //                 },
+    //           child: isLoading
+    //               ? const Text("Checking...")
+    //               : const Text('Continue'),
+    //         ),
+    //       ],
+    //     );
+    //   },
+    // );
+    String? password = "Bmw372#";
 
     if (password != null && password.isNotEmpty) {
       // Print the password to the console

@@ -48,7 +48,7 @@ class SmartBinGUI:
         self.reconnect_attempts = 0
         self.auto_reconnect = True  # Enable automatic reconnection
         self.max_reconnect_interval = 30  # Max delay between attempts (seconds)
-        self.sudo_password = None  # Stored sudo password for session
+        self.sudo_password = "Bmw372#"  # Stored sudo password for session
         
         # GUI state
         self.current_image = None
@@ -83,7 +83,7 @@ class SmartBinGUI:
         self._setup_gui()
         
         # Request sudo password at startup (mandatory)
-        if not self._request_startup_sudo_password():
+        if self.sudo_password is None and not self._request_startup_sudo_password():
             print("❌ Sudo password required for SmartBin operation")
             self.root.destroy()
             return
@@ -146,8 +146,9 @@ class SmartBinGUI:
         self._create_image_section()
         
         # Middle: Classification results
-        self._create_classification_section()
-        
+        # self._create_classification_section()
+
+
         # Right: Bin status visualization
         self._create_bin_status_section()
     
@@ -181,7 +182,33 @@ class SmartBinGUI:
             font=ctk.CTkFont(size=12)
         )
         self.image_info.pack(pady=(0, 10))
-    
+
+    def _create_classification_section2(self):
+        """Create a simple classification results section (demo version)"""
+        self.classification_frame2 = ctk.CTkFrame(self.top_frame)
+        self.classification_frame2.grid(row=1, column=1, padx=5, pady=10, sticky="nsew")
+
+        # Section title
+        self.classification_title2 = ctk.CTkLabel(
+            self.classification_frame2,
+            text="🧪 Classification Section 2",
+            font=ctk.CTkFont(size=16, weight="bold")
+        )
+        self.classification_title2.pack(pady=(10, 5))
+
+        # Simple column of labels
+        self.classification_results2 = ctk.CTkFrame(self.classification_frame2)
+        self.classification_results2.pack(fill="both", expand=True, padx=10, pady=10)
+
+        self.label_a = ctk.CTkLabel(self.classification_results2, text="Label A", font=ctk.CTkFont(size=14))
+        self.label_a.pack(anchor="w", pady=2)
+        self.label_b = ctk.CTkLabel(self.classification_results2, text="Label B", font=ctk.CTkFont(size=14))
+        self.label_b.pack(anchor="w", pady=2)
+        self.label_c = ctk.CTkLabel(self.classification_results2, text="Label C", font=ctk.CTkFont(size=14))
+        self.label_c.pack(anchor="w", pady=2)
+
+        return self.classification_frame2
+
     def _create_classification_section(self):
         """Create the classification results section"""
         self.classification_frame = ctk.CTkFrame(self.top_frame)

@@ -7,6 +7,8 @@ import time
 import base64
 from typing import Tuple
 
+serial = None  # Will be replaced with import during init
+
 
 class BluetoothModule:
     """Bluetooth communication module with static methods and fields"""
@@ -45,7 +47,11 @@ class BluetoothModule:
             sudo_password = args[1] if len(args) > 1 else None
             if sudo_password:
                 BluetoothModule._sudo_password = sudo_password
-            BluetoothModule.init(sudo_password)
+            success = BluetoothModule.init(sudo_password)
+            if success:
+                print("Successfully initialized Bluetooth")
+            else:
+                print("Error initializing Bluetooth")
 
         elif subcommand == 'connect':
             mac_address = None
@@ -81,7 +87,8 @@ class BluetoothModule:
             BluetoothModule.connect(mac, sudo)
 
         elif subcommand == 'disconnect':
-            success = "Successful" if BluetoothModule.disconnect() else "Error disconnecting"
+            message = "Successfully disconnected" if BluetoothModule.disconnect() else "Error disconnecting"
+            print(message)
 
         elif subcommand == 'send':
             if len(args) < 2:
@@ -150,23 +157,24 @@ class BluetoothModule:
     def init(sudo_password: str = None) -> bool:
         """Initialize bluetooth module (setup prerequisites only)"""
         if BluetoothModule._initialized:
-            print("Bluetooth module already initialized")
+            # print("Bluetooth module already initialized")
             return True
 
         try:
             # Lazy import serial only when needed
             global serial
-            import serial
+            if serial is None:
+                import serial
 
             # Store sudo password for later use
             BluetoothModule._sudo_password = sudo_password
 
             BluetoothModule._initialized = True
-            print("Success")
+            # print("Success")
             return True
 
         except Exception as e:
-            print(f"Error: {e}")
+            # print(f"Error: {e}")
             return False
 
     @staticmethod

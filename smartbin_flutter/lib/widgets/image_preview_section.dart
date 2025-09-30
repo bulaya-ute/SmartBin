@@ -55,9 +55,9 @@ class ImagePreviewSection extends StatelessWidget {
                       child: Container(
                         // width: double.infinity,
                         decoration: BoxDecoration(
-                          color: const Color(0xFFF0F0F0),
+                          color: Theme.of(context).colorScheme.surface,
                           border: Border.all(
-                            color: const Color(0xFFCCCCCC),
+                            color: Theme.of(context).colorScheme.surface.withAlpha(128),
                             width: 2,
                           ),
                           borderRadius: BorderRadius.circular(8),
