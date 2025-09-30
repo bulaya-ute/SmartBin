@@ -79,13 +79,30 @@ class _StatusSectionState extends State<StatusSection> {
     required VoidCallback onReset,
     required VoidCallback onSet,
   }) {
+
+    String processedHeader = header.replaceAll("and", "&");
+
+    // Split the string into words. Handles multiple spaces between words.
+    List<String> words = processedHeader.split(''
+        '_').where((word) => word.isNotEmpty).toList();
+
+    // Capitalize the first letter of each word and join them back.
+    processedHeader = words.map((word) {
+      if (word.isEmpty) return ""; // Should not happen with the .where filter above
+      String firstLetter = word[0].toUpperCase();
+      String restOfWord = word.substring(1).toLowerCase(); // Optional: make rest of word lowercase
+      return '$firstLetter$restOfWord';
+    }).join(' ');
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(12.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(header, style: const TextStyle(fontWeight: FontWeight.bold)),
+            Text(processedHeader,
+                // style: const TextStyle(fontWeight: FontWeight.bold)
+            ),
             const SizedBox(height: 12),
             Row(
               children: [
@@ -150,66 +167,68 @@ class _StatusSectionState extends State<StatusSection> {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(12.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Match the style/icon of Classification Results header
-            const Text('🧠 Bin Status', style: TextStyle(fontSize: 18)),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: _counterCard(
-                    header: 'Recyclable Items',
-                    value: _recyclable,
-                    onReset: () => setState(() => _recyclable = 0),
-                    onSet: () => _setValueDialog(
-                      title: 'Set Recyclable Items',
-                      current: _recyclable,
-                      onValue: (v) => setState(() => _recyclable = v),
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Match the style/icon of Classification Results header
+              const Text('🧠 Bin Status', style: TextStyle(fontSize: 18)),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: _counterCard(
+                      header: 'Recyclable Items',
+                      value: _recyclable,
+                      onReset: () => setState(() => _recyclable = 0),
+                      onSet: () => _setValueDialog(
+                        title: 'Set Recyclable Items',
+                        current: _recyclable,
+                        onValue: (v) => setState(() => _recyclable = v),
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _counterCard(
-                    header: 'Non-recyclable Items',
-                    value: _nonRecyclable,
-                    onReset: () => setState(() => _nonRecyclable = 0),
-                    onSet: () => _setValueDialog(
-                      title: 'Set Non-recyclable Items',
-                      current: _nonRecyclable,
-                      onValue: (v) => setState(() => _nonRecyclable = v),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _counterCard(
+                      header: 'Non-recyclable Items',
+                      value: _nonRecyclable,
+                      onReset: () => setState(() => _nonRecyclable = 0),
+                      onSet: () => _setValueDialog(
+                        title: 'Set Non-recyclable Items',
+                        current: _nonRecyclable,
+                        onValue: (v) => setState(() => _nonRecyclable = v),
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _counterCard(
-                    header: 'Coin Dispenser',
-                    value: _coins,
-                    onReset: () => setState(() => _coins = 0),
-                    onSet: () => _setValueDialog(
-                      title: 'Set Coin Dispenser Count',
-                      current: _coins,
-                      onValue: (v) => setState(() => _coins = v),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _counterCard(
+                      header: 'Coin Dispenser',
+                      value: _coins,
+                      onReset: () => setState(() => _coins = 0),
+                      onSet: () => _setValueDialog(
+                        title: 'Set Coin Dispenser Count',
+                        current: _coins,
+                        onValue: (v) => setState(() => _coins = v),
+                      ),
                     ),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            const Text('📊 Detection Counts', style: TextStyle(fontSize: 18)),
-
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              children: widget.detectionCounts!.entries
-                  .map((entry) => _detectionCard(entry.key, entry.value))
-                  .toList(),
-            ),
-          ],
+                ],
+              ),
+              const SizedBox(height: 16),
+              const Text('📊 Detection Counts', style: TextStyle(fontSize: 18)),
+          
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: widget.detectionCounts!.entries
+                    .map((entry) => _detectionCard(entry.key, entry.value))
+                    .toList(),
+              ),
+            ],
+          ),
         ),
       ),
     );

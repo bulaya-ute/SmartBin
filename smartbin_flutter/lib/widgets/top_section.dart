@@ -11,7 +11,7 @@ class TopSection extends StatelessWidget {
     required this.minRightWidth,
     required this.splitterThickness,
     required this.onLeftRatioChanged,
-    required this.detectionClasses,
+    // required this.detectionClasses,
     required this.classificationResult,
     required this.connectionState,
     required this.detectionCounts
@@ -22,7 +22,7 @@ class TopSection extends StatelessWidget {
   final double minRightWidth;
   final double splitterThickness;
   final ValueChanged<double> onLeftRatioChanged;
-  final List<String> detectionClasses;
+  // final List<String> detectionClasses;
   final Map<String, dynamic>? classificationResult;
   final ConnectionState connectionState;
   final Map<String, int> detectionCounts;

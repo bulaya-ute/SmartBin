@@ -44,7 +44,9 @@ class _HomeScreenState extends State<HomeScreen> {
   bool autoReconnect = false;
 
   // Real data from backend
-  List<String> _detectionClasses = [];
+  // List<String> _detectionClasses = [];
+  
+  Map<String, int>? detectionCounts;
   Map<String, double>? _classificationResult;
   Timer? _bufferReadTimer;
 
@@ -86,23 +88,25 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> initializeHome() async {
     try {
       // Get available classes
-      await _loadDetectionClasses();
+      await _loadDetectionCounts();
     } catch (e) {
       appendLogMessage('Error getting classes modules: $e', Colors.red);
     }
   }
 
-  Future<void> _loadDetectionClasses() async {
+  Future<void> _loadDetectionCounts() async {
     try {
       String? response = await Engine.sendCommand('classification get-classes');
       if (response != null) {
         // Parse JSON response
         final List<dynamic> classes = jsonDecode(response);
+        final detectionClasses = classes.cast<String>();
+
         setState(() {
-          _detectionClasses = classes.cast<String>();
+          detectionCounts = Config.loadDetectionCounts();
         });
         appendLogMessage(
-          'Loaded ${_detectionClasses.length} detection classes',
+          'Loaded $detectionClasses.length} detection classes',
           Colors.blue,
         );
       }
@@ -336,10 +340,10 @@ class _HomeScreenState extends State<HomeScreen> {
                     splitterThickness: _splitterThickness,
                     onLeftRatioChanged: (r) => setState(() => _leftRatio = r),
                     // Pass real data to TopSection
-                    detectionClasses: _detectionClasses,
+                    // detectionClasses: _detectionClasses,
                     classificationResult: _classificationResult,
                     connectionState: _connectionState,
-                    detectionCounts: { for (var item in _detectionClasses) item : 0 },
+                    detectionCounts: detectionCounts!,
                   ),
                 ),
 

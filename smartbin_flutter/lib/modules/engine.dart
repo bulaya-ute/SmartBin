@@ -4,20 +4,15 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:path/path.dart' as p;
+import 'package:path/path.dart' as Path;
+
+import 'config.dart';
 
 /// Responsible for communication with python backend, which is used for
 /// running classification model and bluetooth communication
 class Engine {
   static bool _isInitialized = false;
   static Process? process;
-  static String workingDir = p.join(
-    File(Platform.script.toFilePath()).parent.path,
-    "lib",
-    "scripts",
-  );
-  static String pythonExecutablePath = p.join(workingDir, ".venv/bin/python");
-  static String engineScriptPath = p.join(workingDir, "engine.py");
 
   // Stream management
   static StreamSubscription? _stdoutSubscription;
@@ -44,15 +39,15 @@ class Engine {
     }
 
     print(
-      "Starting engine... Working dir: $workingDir \n"
-      "Python executable: $pythonExecutablePath \n"
-      "Python script: $engineScriptPath",
+      "Starting engine... Working dir: $Config.workingDir \n"
+      "Python executable: $Config.pythonExecutablePath \n"
+      "Python script: $Config.engineScriptPath",
     );
     try {
-      process = await Process.start(pythonExecutablePath, [
-        engineScriptPath,
+      process = await Process.start(Config.pythonExecutablePath, [
+        Config.engineScriptPath,
         "start",
-      ], workingDirectory: workingDir);
+      ], workingDirectory: Config.workingDir);
 
       // Set up single persistent stream listener
       _setupStreamListener();
