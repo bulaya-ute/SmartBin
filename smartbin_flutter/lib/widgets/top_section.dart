@@ -81,16 +81,22 @@ class TopSection extends StatelessWidget {
                     onLeftRatioChanged(newRatio);
                   },
                   child: Container(
-                    color: const Color(0xFFE0E0E0),
-                    child: Center(
-                      child: Container(
-                        width: 3,
-                        height: 40,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF666666),
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                      ),
+                    // color: const Color(0xFFE0E0E0),
+                    margin: EdgeInsets.symmetric(vertical: 10),
+                    child: Stack(
+                      children: [
+                        VerticalDivider(),
+                        // Center(
+                        //   child: Container(
+                        //     width: 3,
+                        //     height: 40,
+                        //     decoration: BoxDecoration(
+                        //       color: const Color(0xFF666666),
+                        //       borderRadius: BorderRadius.circular(2),
+                        //     ),
+                        //   ),
+                        // ),
+                      ],
                     ),
                   ),
                 ),

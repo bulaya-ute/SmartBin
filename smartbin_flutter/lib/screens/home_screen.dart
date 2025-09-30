@@ -123,8 +123,6 @@ class _HomeScreenState extends State<HomeScreen> {
           for (String line in buffer) {
             line = line.trim();
             if (line.trim().isEmpty) continue;
-
-
             appendLogMessage(line);
           }
         } catch (e) {
@@ -365,18 +363,23 @@ class _HomeScreenState extends State<HomeScreen> {
                       child: Container(
                         margin: const EdgeInsets.symmetric(horizontal: 10),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFE0E0E0),
+                          // color: const Color(0x09E0E0E0),
                           borderRadius: BorderRadius.circular(4),
                         ),
-                        child: Center(
-                          child: Container(
-                            width: 40,
-                            height: 3,
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF666666),
-                              borderRadius: BorderRadius.circular(2),
-                            ),
-                          ),
+                        child: Stack(
+                          children: [
+                            Divider(),
+                            // Center(
+                            //   child: Container(
+                            //     width: 40,
+                            //     height: 3,
+                            //     decoration: BoxDecoration(
+                            //       color: const Color(0xFF666666),
+                            //       borderRadius: BorderRadius.circular(2),
+                            //     ),
+                            //   ),
+                            // ),
+                          ],
                         ),
                       ),
                     ),

@@ -11,6 +11,7 @@ class Bluetooth extends BaseModule {
   static String? serialPort;
   static String moduleName = "BLUETOOTH";
   static void Function()? disconnectCallback;
+  static List<String> bluetoothTransmissionBuffer = [];
 
   static bool get isInitialized {
     if (!_isInitialized) {
@@ -21,6 +22,10 @@ class Bluetooth extends BaseModule {
 
   static set isInitialized(bool value) {
     _isInitialized = value;
+  }
+
+  static void flushBuffer() {
+    bluetoothTransmissionBuffer.clear();
   }
 
   /// Initialization method. Sends bluetooth init command to backend
@@ -65,12 +70,26 @@ class Bluetooth extends BaseModule {
       timeout: Duration(seconds: 15),
     );
 
+
     if (response == null) {
       print("Connection failed: No response from backend");
       return false;
     }
 
-    response = response.trim();
+    // Ignore empty list strings from previous buffer requests
+    while (response == "[]") {
+      response = await Engine.sendCommand(
+        "bluetooth connect --mac $macAddress --sudo ${Security.sudoPassword}",
+        timeout: Duration(seconds: 15),
+      );
+
+      if (response == null) {
+        print("Connection failed: No response from backend");
+        return false;
+      }
+    }
+
+    response = response!.trim();
     if (response.toLowerCase().startsWith("error")) {
       print(response);
       return false;
@@ -78,7 +97,7 @@ class Bluetooth extends BaseModule {
       print("Successfully connected to Bluetooth device");
       return true;
     } else {
-      error("Unexpected message: $response");
+      error("Unexpected message: '$response'");
       return false;
     }
   }
