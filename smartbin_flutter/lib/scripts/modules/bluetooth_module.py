@@ -25,7 +25,6 @@ class BluetoothModule:
     _stored_mac = "EC:E3:34:15:F2:62"
 
     # Configuration
-    # _esp32_mac = "EC:E3:34:15:F2:62"
     _rfcomm_device = "/dev/rfcomm0"
     _baudrate = 115200
 
